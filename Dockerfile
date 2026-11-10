@@ -15,6 +15,8 @@ RUN python -m pip install --no-cache-dir --timeout 60 --index-url "$PIP_INDEX_UR
     && chown -R chatbot:chatbot /app/storage
 
 COPY src ./src
+# Normalize Windows CRLF in the POSIX entrypoint even if Git checkout used CRLF.
+RUN sed -i 's/\r$//' /app/src/host/entrypoint.sh
 
 USER chatbot
 EXPOSE 8000

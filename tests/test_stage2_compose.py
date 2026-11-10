@@ -35,6 +35,15 @@ def test_secrets_not_in_defaults_and_environment_template_is_committable():
     assert production["vector"]["url"] == ""
 
 
+def test_shell_entrypoint_is_normalized_for_windows_checkout():
+    attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+    assert "*.sh text eol=lf" in attributes
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert "RUN sed -i 's/\\r$//' /app/src/host/entrypoint.sh" in dockerfile
+    entrypoint = (ROOT / "src/host/entrypoint.sh").read_bytes()
+    assert b"\r" not in entrypoint
+
+
 def test_pip_index_build_argument_and_local_mirror_template():
     compose = yaml.safe_load((ROOT / "compose.yaml").read_text(encoding="utf-8"))
     assert compose["services"]["app"]["build"]["args"]["PIP_INDEX_URL"] == "${CHATBOT_PIP_INDEX_URL:-https://pypi.org/simple/}"

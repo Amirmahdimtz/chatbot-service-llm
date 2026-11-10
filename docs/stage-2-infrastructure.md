@@ -16,8 +16,9 @@ production deployment. The architecture and implementation guides are tracked at
 | API liveness remains separate from dependency checks | Avoid reporting LLM/DB readiness when only HTTP works | Stage 2 |
 | Explicit environment-only passwords/API key | Avoid committing secrets and failing open in non-development config | Stage 2 |
 | Optional Runflare PyPI mirror | Resolve local Docker image Python dependencies despite incomplete/time-limited reads from pypi.org | Stage 2 development only |
+| LF-safe Shell entrypoint | Windows Git checkout may introduce CRLF; force LF via Git attributes and normalize before container startup | Stage 2 |
 
-The implementation guide's Decision Log and Version History are synchronized in version 1.0.3. No approved product-level decision is changed by this development runbook.
+The implementation guide's Decision Log and Version History are synchronized in version 1.0.4. No approved product-level decision is changed by this development runbook.
 
 ## Prerequisites
 
@@ -269,3 +270,32 @@ Before sharing logs, redact credentials and any private proxy or package-index
 URLs. `docker compose config` without `--quiet` prints environment secrets,
 so do not share it. Do not retry `docker compose exec app` until
 `docker compose up -d --build --wait` actually succeeds.
+
+## Troubleshooting: `/bin/sh` reports `set: Illegal option -`
+
+On Windows, Git may check out `src/host/entrypoint.sh` with CRLF line endings.
+The Debian `/bin/sh` used in the app container treats the trailing carriage
+return after `set -eu` as an invalid option and exits with code 2.
+This can cause a restart loop before the Python API process starts.
+
+The project now includes `.gitattributes` (`*.sh text eol=lf`) and also
+normalizes the entrypoint with `sed` during Docker image creation, before
+switching to its unprivileged runtime user. CI exercises a deliberately
+CRLF-converted entrypoint during its full Compose startup check.
+
+After pulling the fix, rebuild the app image (do not delete volumes):
+
+```powershell
+Set-Location "D:\chatbot-service-llm"
+git status --short
+# If the working tree is clean:
+git pull --ff-only origin main
+$env:CHATBOT_PIP_INDEX_URL = "https://mirror-pypi.runflare.com/simple/"
+docker compose up -d --build --wait
+docker compose ps
+docker compose exec -T app python -m src.infrastructure.scripts.check_infrastructure
+```
+
+Check the actual host port in `docker compose ps`, especially if it was
+overridden to 18000. The next stage 2 validation is the optional Windows
+llama.cpp health/model check, followed by persistence testing.

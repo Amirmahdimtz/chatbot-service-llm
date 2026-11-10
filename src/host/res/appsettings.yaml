@@ -14,4 +14,10 @@ storage:
   path: ""
 llm:
   base_url: ""
-  timeout_seconds: 10
+  timeout_seconds: 120
+  model_name: ""
+  max_tokens: 256
+  max_output_chars: 8192
+  max_concurrent_requests: 1
+auth:
+  dev_enabled: false

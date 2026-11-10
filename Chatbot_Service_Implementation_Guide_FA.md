@@ -2,7 +2,7 @@
 
 > **نام فایل:** `Chatbot_Service_Implementation_Guide_FA.md`  
 > **پروژه:** `chatbot-service-llm`  
-> **نسخه سند:** `1.0.4`  
+> **نسخه سند:** `1.0.5`  
 > **تاریخ تدوین:** `2026-11-10`  
 > **وضعیت:** قرارداد محصول و تصمیم‌های معماری مورد توافق؛ برخی تنظیمات مدل و استقرار محلی تا زمان Benchmark قابل اصلاح هستند.  
 > **سند همراه و الزامی:** `Service_Architecture_Guide_FA.md`
@@ -474,6 +474,17 @@ Upload
 
 سناریوهای تخصصی می‌توانند از `ChatService` با Scenario مشخص استفاده کنند؛ Endpoint اختصاصی صرفاً زمانی ساخته شود که قرارداد ساختاریافته مستقلی لازم باشد. تعداد زیاد Controller به‌تنهایی هدف نیست.
 
+### قرارداد تثبیت‌شده Stage 3 (2026-11-10)
+
+- `POST /api/v1/chat/stream`: درخواست JSON دارای `message` (متن Trim‌شده، ۱ تا ۱۰۰۰ کاراکتر) و `conversation_id` اختیاری از نوع UUID؛ فیلد اضافی/هویت یا Audience ادعایی در Body پذیرفته نمی‌شود.
+- در Stage 3 فقط درخواست مستقل یک‌پیامی پشتیبانی می‌شود. `conversation_id` غیرتهی پاسخ `409 CONVERSATION_UNAVAILABLE` دارد؛ `message_start.conversation_id=null` به‌معنای عدم وجود Conversation پایدار است. Replay/Idempotency، History، Ownership و Endpointهای CRUD مکالمه در Stage 4 به Persistence واقعی متصل می‌شوند؛ هیچ ID قابل ادامه یا State ساختگی ایجاد نمی‌شود.
+- رویدادهای واقعی: `message_start`، `delta`های تدریجی از `llama.cpp`، `message_end` با `status=completed`؛ در خطای میانه Stream، `error` و سپس یک `message_end` با `status=failed`. روی Disconnect، Stream/HTTP upstream بسته و پایان ساختگی ارسال نمی‌شود. `request_id` و `message_id` UUIDهای سمت Server هستند.
+- قرارداد DTO برای `sources` و Conversation تعریف شده ولی `sources`/Tool Events و Endpointهای Conversation تا اجرای واقعی RAG/History منتشر نمی‌شوند.
+- خطای Validation دارای `error.code=VALIDATION_ERROR`، `request_id` و Field/Code بدون انعکاس Input است؛ خطای Authentication/Contract پیش از Stream با JSON و خطای LLM پس از Stream با SSE و پیام عمومی اعلام می‌شود. در نبود Model، پاسخ SSE خطا دارد و HTTP status دیگر قابل تغییر نیست.
+- کنترل بار CPU با Semaphore اشتراکی در Provider (پیش‌فرض ۱ درخواست در هر Process)، پاسخ `LLM_BUSY` در Stream بدون صف نامحدود، محدودیت کاراکتر خروجی، حداکثر توکن و Timeout اعمال می‌شود.
+- تنها هویت Local معتبر، Token محرمانه `CHATBOT_DEV_API_TOKEN` در `ENV_TYPE=development` با `auth.dev_enabled=true` است؛ Principal آزمایشی همیشه `public` و Synthetic است. Headerهای `X-Audience`/`X-User-ID` رد می‌شوند. Production تا افزودن Identity Provider معتبر، برای Chat همواره `401` (fail closed) می‌دهد؛ این مسیر Local جایگزین SSO نیست.
+- `llama.cpp` از `POST /v1/chat/completions` با `stream=true` استفاده می‌کند؛ `model_name` اختیاری و برای single-model server خالی است. سازگاری Chat Template، کیفیت فارسی، TTFT و Cancel باید روی Build/Model واقعی Windows اندازه‌گیری شوند؛ بدون شواهد محلی تأییدشده نیستند.
+
 ### ۱۰.۲. SSE
 
 - `Content-Type: text/event-stream`، Encoding UTF-8 و رعایت قواعد framing پیام‌های SSE.
@@ -784,6 +795,7 @@ storage:
 | 2026-11-10 | Stage 2 development credentials | آماده‌سازی idempotent و CRLF-safe فایل `.env`، حفظ Secret موجود و عدم نمایش Credential در خروجی | اصلاح راه‌اندازی Development |
 | 2026-11-10 | Stage 2 PyPI mirror | انتخاب اختیاری Mirror ران‌فلر برای Docker Build محلی از طریق Build ARG، پیش‌فرض PyPI رسمی در CI و حفظ TLS | تصمیم اجرایی Development؛ آزمون Windows باز |
 | 2026-11-10 | Stage 2 shell line endings | پیشگیری از CRLF در `entrypoint.sh` هنگام Windows Checkout و نرمال‌سازی دفاعی در Docker Build، با CI شبیه‌ساز CRLF | رفع Crash مرحله ۲؛ اعتبارسنجی محلی باز |
+| 2026-11-10 | Stage 3 Chat/SSE/Identity | One-shot bounded SSE over local llama.cpp; no fake conversation persistence; synthetic public Bearer token only in Development; Production fail-closed; concurrency=1 | تصمیم اجرایی Stage 3؛ تست واقعی Windows باز |
 
 ---
 
@@ -814,5 +826,6 @@ LLM، Embedding و Reranking محلی، Runtime اصلی llama.cpp، Vector DB �
 | `1.0.2` | `2026-11-10` | اصلاح مشکل سازگاری CRLF در آماده‌سازی Environment مرحله ۲، افزودن راه‌اندازی idempotent و اصلاح دستور اجرای llama.cpp در نشست مستقل PowerShell. |
 | `1.0.3` | `2026-11-10` | امکان انتخاب Runflare PyPI Mirror برای نصب وابستگی‌ها در Docker Build مرحله ۲ و ثبت ملاحظات امنیتی. |
 | `1.0.4` | `2026-11-10` | اصلاح CRLF در Shell EntryPoint برای Docker روی Windows و افزودن تست Integration شبیه‌ساز Checkout ویندوز. |
+| `1.0.5` | `2026-11-10` | ثبت قراردادهای Chat/Conversation/SSE، Error/Concurrency و سیاست Identity آزمایشی Stage 3 بدون Persistence جعلی. |
 
 **پایان سند — این فایل باید در کنار `Service_Architecture_Guide_FA.md` نگهداری و با تصمیم‌های تأییدشده جدید نسخه‌بندی شود.**

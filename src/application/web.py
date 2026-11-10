@@ -7,7 +7,10 @@ import importlib
 import inspect
 from pathlib import Path
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from uuid import uuid4
 
 from src.infrastructure.context.sql_db.psql_dbcontext import PsqlDbContext
 from src.infrastructure.di.inject import inject, resolve
@@ -39,6 +42,22 @@ class WebService:
             version=str(self._config_reader.get("app.version", "0.1.0")),
             lifespan=lifespan,
         )
+        @app.exception_handler(RequestValidationError)
+        async def request_validation_error_async(_request: Request, exc: RequestValidationError):
+            request_id = str(uuid4())
+            return JSONResponse(
+                status_code=422,
+                content={"error": {
+                    "code": "VALIDATION_ERROR", "message": "Invalid request.",
+                    "request_id": request_id,
+                    "fields": [
+                        {"field": ".".join(str(part) for part in entry["loc"]), "code": entry["type"]}
+                        for entry in exc.errors()
+                    ],
+                }},
+                headers={"X-Request-ID": request_id},
+            )
+
         application_root = Path(__file__).resolve().parent
         api_prefix = self._config_reader.get_api_prefix()
         for feature_dir in sorted(application_root.iterdir()):

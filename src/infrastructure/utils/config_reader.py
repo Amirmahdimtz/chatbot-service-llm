@@ -18,6 +18,7 @@ _ENV_OVERRIDES = {
     "llm.base_url": "CHATBOT_LLM_BASE_URL",
     "llm.api_key": "CHATBOT_LLM_API_KEY",
     "llm.timeout_seconds": "CHATBOT_LLM_TIMEOUT_SECONDS",
+    "auth.dev_api_token": "CHATBOT_DEV_API_TOKEN",
 }
 
 

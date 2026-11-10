@@ -1,4 +1,4 @@
-name: Stage 2 checks
+name: Stage 2 and 3 checks
 on:
   push:
     branches: [main]
@@ -73,7 +73,7 @@ jobs:
           [IO.File]::WriteAllText($Template, $Text, $Utf8)
           & ./scripts/initialize-development-env.ps1 -EnvPath $EnvPath -TemplatePath $Template
           $First = [IO.File]::ReadAllText($EnvPath)
-          foreach ($Name in @("POSTGRES_PASSWORD", "CHATBOT_LLM_API_KEY")) {
+          foreach ($Name in @("POSTGRES_PASSWORD", "CHATBOT_LLM_API_KEY", "CHATBOT_DEV_API_TOKEN")) {
               if (-not [regex]::IsMatch($First, "(?m)^" + $Name + "=[A-Za-z0-9_-]{43}`r?$")) {
                   throw "$Name was not generated for CRLF environment"
               }

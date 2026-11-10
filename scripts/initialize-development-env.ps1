@@ -38,7 +38,14 @@ function New-UrlSafeSecret {
     return [Convert]::ToBase64String($Bytes).TrimEnd("=").Replace("+", "-").Replace("/", "_")
 }
 
-foreach ($Name in @("POSTGRES_PASSWORD", "CHATBOT_LLM_API_KEY")) {
+# Older stage-2 .env files lack the stage-3 token. Add it without touching existing values.
+if ($Contents -notmatch "(?m)^CHATBOT_DEV_API_TOKEN=") {
+    $Newline = if ($Contents.Contains("`r`n")) { "`r`n" } else { "`n" }
+    if (-not $Contents.EndsWith("`n")) { $Contents += $Newline }
+    $Contents += "CHATBOT_DEV_API_TOKEN=" + $Newline
+    $Changed = $true
+}
+foreach ($Name in @("POSTGRES_PASSWORD", "CHATBOT_LLM_API_KEY", "CHATBOT_DEV_API_TOKEN")) {
     $Pattern = "(?m)^" + [regex]::Escape($Name) + "=(?<value>[^\r\n]*)\r?$"
     $EntryMatches = [regex]::Matches($Contents, $Pattern)
     if ($EntryMatches.Count -ne 1) {

@@ -1,10 +1,14 @@
 # chatbot-service-llm
 
-Stage 2: local infrastructure for FastAPI, PostgreSQL, Qdrant, persistent
-application storage, and a configurable connection to Windows-hosted llama.cpp.
-The HTTP API remains stage 1's `GET /api/v1/health` (process liveness only).
-Stage 2 deliberately does **not** add chat, RAG, collections, product tables, or
-new migrations.
+Stage 3 adds authenticated (synthetic-development-only) **one-shot** Chat SSE from a
+Windows-hosted local `llama.cpp` model, with bounded concurrency and safe stream errors.
+Conversation DTOs are defined but **no conversation/history routes or persistence exist yet**;
+they are stage 4 work. Production Chat fails closed until a trusted identity integration exists.
+
+See [Stage 3 Chat SSE runbook](docs/stage-3-chat-streaming.md) for the API contract,
+PowerShell streaming test, credential setup and remaining Windows acceptance checks.
+See [Stage 2 infrastructure runbook](docs/stage-2-infrastructure.md) for Compose,
+PostgreSQL, Qdrant, storage and native llama.cpp prerequisites.
 
 The project uses constructor `@inject`, feature-folder controller discovery,
 SQLAlchemy Async with a single engine and per-operation sessions, and Alembic.

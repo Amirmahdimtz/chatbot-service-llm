@@ -26,7 +26,7 @@ class LlamaCppProvider:
 
     def __init__(self, config_reader: ConfigReader) -> None:
         url = config_reader.get("llm.base_url")
-        if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+        if not isinstance(url, str) or (url and not url.startswith(("http://", "https://"))):
             raise ValueError("LLM URL is not configured; set CHATBOT_LLM_BASE_URL")
         self._base_url = url.rstrip("/")
         self._timeout = float(config_reader.get("llm.timeout_seconds", 120))
@@ -47,6 +47,8 @@ class LlamaCppProvider:
         return {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
 
     async def check_ready_async(self) -> bool:
+        if not self._base_url:
+            return False
         try:
             async with httpx.AsyncClient(timeout=self._timeout, trust_env=False, headers=self._headers()) as client:
                 health = await client.get(f"{self._base_url}/health")
@@ -61,6 +63,8 @@ class LlamaCppProvider:
             return False
 
     async def stream_chat_async(self, message: str) -> AsyncIterator[str]:
+        if not self._base_url:
+            raise LlmStreamError("LLM_UNAVAILABLE")
         # Never queue CPU inference indefinitely; a busy model yields a structured SSE error.
         try:
             await asyncio.wait_for(self._slots.acquire(), timeout=0.02)

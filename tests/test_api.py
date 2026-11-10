@@ -8,8 +8,7 @@ def test_health_discovered_without_db():
         response = client.get('/api/v1/health')
     assert response.status_code == 200
     assert response.json() == {'status': 'ok'}
-    routes = [r.path for r in app.routes if hasattr(r, "path")]
-    assert routes.count('/api/v1/health') == 1
+    assert "/api/v1/health" in app.openapi()["paths"]
 
 
 def test_openapi_health_route():

@@ -16,7 +16,7 @@ production deployment. The architecture and implementation guides are tracked at
 | API liveness remains separate from dependency checks | Avoid reporting LLM/DB readiness when only HTTP works | Stage 2 |
 | Explicit environment-only passwords/API key | Avoid committing secrets and failing open in non-development config | Stage 2 |
 
-The implementation guide's Decision Log and Version History are synchronized in version 1.0.1. No approved product-level decision is changed by this development runbook.
+The implementation guide's Decision Log and Version History are synchronized in version 1.0.2. No approved product-level decision is changed by this development runbook.
 
 ## Prerequisites
 
@@ -153,3 +153,74 @@ startup** does not establish that these endpoints belong to this project.
 Inspect `docker ps` and `docker compose ps`. If host ports are occupied by
 unrelated applications, choose alternative `QDRANT_HOST_PORT` or
 `CHATBOT_APP_PORT` values in `.env`; keep internal container ports unchanged.
+
+## Troubleshooting: occupied local ports on Windows
+
+Before starting this Compose project, check ownership of its default host ports:
+
+```powershell
+docker ps --format "table {{.Names}}\t{{.Ports}}"
+Get-NetTCPConnection -State Listen -LocalPort 8000,6333,5432,8080 -ErrorAction SilentlyContinue |
+    Select-Object LocalAddress,LocalPort,OwningProcess
+```
+
+Do not stop, remove, or change another project's containers to make these ports
+available. When defaults are occupied, edit **only the host port fields** in
+the existing, untracked `.env` file, for example:
+
+```dotenv
+CHATBOT_APP_PORT=18000
+QDRANT_HOST_PORT=16333
+POSTGRES_HOST_PORT=15432
+```
+
+Check the alternatives are free on your host before using them. These values
+change only the published host ports; container-to-container access still uses
+`postgres:5432`, `qdrant:6333`, and `app:8000`. Validate with
+`docker compose config --quiet`, then run the Compose startup command and
+inspect `docker compose ps`. After changing ports, the host health URL becomes
+`http://127.0.0.1:18000/api/v1/health`. A response from an older URL
+does **not** prove that this project's service is healthy.
+
+## Troubleshooting: pip sees no FastAPI distributions in Docker Build
+
+If the application build fails at `pip install -r requirements.txt` with
+`Could not find a version that satisfies the requirement fastapi ... (from
+versions: none)`, first check Package Index reachability. The specified
+FastAPI range supports Python 3.12 and was validated by CI; do not change
+version constraints to work around an unverified networking failure.
+
+Run a pip lookup in a disposable container based on the **same image** used by
+the Dockerfile; it does not change this project's services or volumes:
+
+```powershell
+docker run --rm --entrypoint python python:3.12.16-slim-bookworm -m pip --disable-pip-version-check index versions fastapi
+```
+
+For further diagnostics, check DNS and HTTPS from the same image:
+
+```powershell
+docker run --rm --entrypoint python python:3.12.16-slim-bookworm -c "import socket; print(socket.getaddrinfo('pypi.org', 443)[0][4])"
+docker run --rm --entrypoint python python:3.12.16-slim-bookworm -c "import urllib.request; print(urllib.request.urlopen('https://pypi.org/simple/fastapi/', timeout=20).status)"
+```
+
+These checks distinguish resolver problems, HTTPS connectivity, and pip's
+configured Package Index. A successful `docker pull` alone does not prove
+that `pip` within a BuildKit container can access PyPI: registry image
+pulls and container/build network traffic can have different proxy paths.
+
+If the lookup fails, inspect **Docker Desktop > Settings > Resources >
+Proxies** and the Windows system proxy/VPN configuration, using the official
+Docker Desktop documentation. Do not disable security controls, add
+`--trusted-host`, bypass TLS verification, or use an unknown package mirror.
+If the lookup succeeds but the build still fails, capture a sanitized verbose
+build log:
+
+```powershell
+docker compose --progress plain build app
+```
+
+Before sharing logs, redact credentials and any private proxy or package-index
+URLs. `docker compose config` without `--quiet` prints environment secrets,
+so do not share it. Do not retry `docker compose exec app` until
+`docker compose up -d --build --wait` actually succeeds.

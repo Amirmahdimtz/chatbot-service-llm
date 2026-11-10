@@ -31,6 +31,14 @@ restarts/down operations; document storage is a configurable bind mount. On
 Windows, check Docker Desktop's disk image location before downloading images
 because named-volume data may consume C: space.
 
+On Windows, inspect host port ownership before `docker compose up`. If another
+project already uses ports 8000, 6333, or 5432, set separate
+`CHATBOT_APP_PORT`, `QDRANT_HOST_PORT`, and `POSTGRES_HOST_PORT`
+values in your private `.env`; do not stop unrelated containers.
+If pip inside Docker Build reports `(from versions: none)` for FastAPI,
+follow the runbook's Package Index network diagnostics before changing
+requirements.
+
 Python unit/API tests use `requirements-dev.txt` and `python -m pytest -q`.
 GitHub Actions tests Python 3.11/3.12 and runs container infrastructure checks.
 Actual Windows host bridge networking, local llama.cpp, and persistence after

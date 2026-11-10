@@ -5,3 +5,13 @@ api:
   prefix: /api/v1
 database:
   url: ""
+vector:
+  url: http://127.0.0.1:6333
+  timeout_seconds: 5
+  public_collection: knowledge_public
+  internal_collection: knowledge_internal
+storage:
+  path: storage
+llm:
+  base_url: http://127.0.0.1:8080
+  timeout_seconds: 10

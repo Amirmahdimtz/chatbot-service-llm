@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 import importlib
 import inspect
 from pathlib import Path
 
 from fastapi import APIRouter, FastAPI
 
-from src.infrastructure.di.inject import inject
+from src.infrastructure.context.sql_db.psql_dbcontext import PsqlDbContext
+from src.infrastructure.di.inject import inject, resolve
 from src.infrastructure.utils.config_reader import ConfigReader
 
 
@@ -22,9 +24,20 @@ class WebService:
         self._config_reader = config_reader
 
     def create_app(self) -> FastAPI:
+        @asynccontextmanager
+        async def lifespan(_app: FastAPI):
+            # The engine is created once per process, but sessions are never shared.
+            db_context = resolve(PsqlDbContext) if self._config_reader.get("database.url") else None
+            try:
+                yield
+            finally:
+                if db_context is not None:
+                    await db_context.dispose_async()
+
         app = FastAPI(
             title=self._config_reader.get("app.name", "Chatbot Service"),
             version=str(self._config_reader.get("app.version", "0.1.0")),
+            lifespan=lifespan,
         )
         application_root = Path(__file__).resolve().parent
         api_prefix = self._config_reader.get_api_prefix()

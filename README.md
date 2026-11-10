@@ -1,82 +1,36 @@
 # chatbot-service-llm
 
-Stage 1: baseline FastAPI architecture with convention-based DI, controller discovery,
-async SQLAlchemy repository contracts and Alembic configuration.
+Stage 2: local infrastructure for FastAPI, PostgreSQL, Qdrant, persistent
+application storage, and a configurable connection to Windows-hosted llama.cpp.
+The HTTP API remains stage 1's `GET /api/v1/health` (process liveness only).
+Stage 2 deliberately does **not** add chat, RAG, collections, product tables, or
+new migrations.
 
-## Local setup (PowerShell, Python 3.11 or 3.12)
+The project uses constructor `@inject`, feature-folder controller discovery,
+SQLAlchemy Async with a single engine and per-operation sessions, and Alembic.
 
-Python 3.11 and 3.12 are tested in CI. Check installed versions with `py -0p`
-before creating the virtual environment.
+Read [the complete stage 2 runbook](docs/stage-2-infrastructure.md) before
+running containers. It documents safe Windows PowerShell setup, environment
+variables, Windows Firewall/LLM access, non-destructive persistence checks,
+and log collection. Do not commit `.env`, passwords, user data or model files.
 
-Clone into the preferred directory only when it is absent or empty. If it already
-contains unrelated files, leave them untouched and use a separate directory.
-Never delete or overwrite existing files just to clone the repository.
+Key commands (after reviewing the runbook and creating a valid `.env`):
 
 ```powershell
-$Repo = "https://github.com/Amirmahdimtz/chatbot-service-llm.git"
-$Project = "D:\chatbot-service-llm"
-
-if (Test-Path -LiteralPath $Project) {
-    if (Test-Path -LiteralPath (Join-Path $Project ".git")) {
-        Set-Location $Project
-        if ((git branch --show-current) -ne "main") {
-            throw "Review the current branch before pulling."
-        }
-        if ((git status --porcelain | Out-String).Trim()) {
-            throw "Local changes exist. Review them before pulling."
-        }
-        git pull --ff-only origin main
-    }
-    elseif (@(Get-ChildItem -LiteralPath $Project -Force).Count -eq 0) {
-        git clone $Repo $Project
-    }
-    else {
-        $Project = "D:\chatbot-service-llm-git"
-        if (Test-Path -LiteralPath $Project) {
-            throw "Alternate clone directory already exists. Choose a new location."
-        }
-        git clone $Repo $Project
-    }
-}
-else {
-    git clone $Repo $Project
-}
-if ($LASTEXITCODE -ne 0) { throw "Git operation failed." }
-
-Set-Location $Project
-git rev-parse HEAD
-
-# Choose the version that 'py -0p' reports; Python 3.12 is shown here.
-py -3.12 -m venv .venv
-if ($LASTEXITCODE -ne 0) { throw "Virtual environment creation failed." }
-
-$Python = Join-Path $Project ".venv\Scripts\python.exe"
-if (-not (Test-Path -LiteralPath $Python)) {
-    throw "Virtual environment Python executable is missing."
-}
-
-$env:PIP_CACHE_DIR = "D:\pip-cache"
-$env:ENV_TYPE = "development"
-& $Python -m pip install -r requirements-dev.txt
-if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed." }
-
-& $Python -m compileall -q src tests
-& $Python -m pytest -q
-& $Python -m uvicorn src.host.app:app --host 127.0.0.1 --port 8000
+docker compose config --quiet
+docker compose up -d --build --wait
+docker compose exec -T app python -m src.infrastructure.scripts.check_infrastructure
+# Run llama.cpp on Windows host, then explicitly verify the optional model:
+docker compose exec -T app python -m src.infrastructure.scripts.check_infrastructure --llm
+docker compose down
 ```
 
-Open `http://127.0.0.1:8000/api/v1/health` for a process-liveness check.
-This route does not test the database, model runtime, or vector database.
+The `postgres_data` and `qdrant_data` named volumes persist across ordinary
+restarts/down operations; document storage is a configurable bind mount. On
+Windows, check Docker Desktop's disk image location before downloading images
+because named-volume data may consume C: space.
 
-`CHATBOT_DATABASE_URL` is read from the process environment when the database
-is used, for example `postgresql+asyncpg://USER:PASSWORD@HOST:5432/DB_NAME`.
-Do **not** commit credentials or set a production URL in appsettings files.
-
-Alembic configuration is at `src/infrastructure/alembic/alembic.ini`.
-After creating a real model and configuring a PostgreSQL connection, run
-`python -m alembic -c src/infrastructure/alembic/alembic.ini revision --autogenerate -m "describe change"`
-and review the generated migration before applying `upgrade head`.
-No application tables or migrations exist yet.
-
-The technical requirements and stage order are defined in
-`Chatbot_Service_Implementation_Guide_FA.md`. Stage 2 is not implemented.
+Python unit/API tests use `requirements-dev.txt` and `python -m pytest -q`.
+GitHub Actions tests Python 3.11/3.12 and runs container infrastructure checks.
+Actual Windows host bridge networking, local llama.cpp, and persistence after
+restart still require local confirmation.

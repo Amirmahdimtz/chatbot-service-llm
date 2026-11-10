@@ -1,4 +1,4 @@
-"""Read environment-specific non-secret appsettings and environment overrides."""
+"""Read environment-specific non-secret appsettings and explicit environment overrides."""
 
 from __future__ import annotations
 
@@ -9,6 +9,16 @@ from typing import Any
 import yaml
 
 from src.infrastructure.di.inject import inject
+
+
+_ENV_OVERRIDES = {
+    "database.url": "CHATBOT_DATABASE_URL",
+    "vector.url": "CHATBOT_QDRANT_URL",
+    "storage.path": "CHATBOT_STORAGE_PATH",
+    "llm.base_url": "CHATBOT_LLM_BASE_URL",
+    "llm.api_key": "CHATBOT_LLM_API_KEY",
+    "llm.timeout_seconds": "CHATBOT_LLM_TIMEOUT_SECONDS",
+}
 
 
 @inject
@@ -26,8 +36,9 @@ class ConfigReader:
         self._data = data
 
     def get(self, key: str, default: Any = None) -> Any:
-        if key == "database.url" and "CHATBOT_DATABASE_URL" in os.environ:
-            return os.environ["CHATBOT_DATABASE_URL"]
+        override = _ENV_OVERRIDES.get(key)
+        if override is not None and override in os.environ:
+            return os.environ[override]
         value: Any = self._data
         for component in key.split("."):
             if not isinstance(value, dict) or component not in value:

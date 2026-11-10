@@ -1,8 +1,9 @@
-name: Stage 1 checks
+name: Stage 2 checks
 on:
   push:
     branches: [main]
   pull_request:
+
 jobs:
   tests:
     runs-on: ubuntu-latest
@@ -17,3 +18,34 @@ jobs:
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m compileall -q src tests
       - run: python -m pytest -q
+      - run: python -m alembic -c src/infrastructure/alembic/alembic.ini history
+
+  infrastructure:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: ci-only-synthetic-password
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose
+        run: docker compose config --quiet
+      - name: Prepare bind mount for unprivileged app user
+        run: |
+          mkdir -p storage
+          sudo chown 10001:10001 storage
+      - name: Build and start infrastructure
+        run: docker compose up -d --build --wait --wait-timeout 240
+      - name: Verify async database, Qdrant and persistent storage
+        run: docker compose exec -T app python -m src.infrastructure.scripts.check_infrastructure
+      - name: Restart without deleting volumes and recheck
+        run: |
+          docker compose restart app postgres qdrant
+          docker compose up -d --wait --wait-timeout 180
+          docker compose exec -T app python -m src.infrastructure.scripts.check_infrastructure
+      - name: Show container status on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --tail 60
+      - name: Stop containers without deleting volumes
+        if: always()
+        run: docker compose down

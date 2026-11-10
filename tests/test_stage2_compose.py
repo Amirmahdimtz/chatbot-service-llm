@@ -33,3 +33,14 @@ def test_secrets_not_in_defaults_and_environment_template_is_committable():
     assert production["database"]["url"] == ""
     assert production["llm"]["base_url"] == ""
     assert production["vector"]["url"] == ""
+
+
+def test_pip_index_build_argument_and_local_mirror_template():
+    compose = yaml.safe_load((ROOT / "compose.yaml").read_text(encoding="utf-8"))
+    assert compose["services"]["app"]["build"]["args"]["PIP_INDEX_URL"] == "${CHATBOT_PIP_INDEX_URL:-https://pypi.org/simple/}"
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert "ARG PIP_INDEX_URL=https://pypi.org/simple/" in dockerfile
+    assert '--index-url "$PIP_INDEX_URL"' in dockerfile
+    assert "--trusted-host" not in dockerfile
+    template = (ROOT / ".env.example").read_text(encoding="utf-8")
+    assert "CHATBOT_PIP_INDEX_URL=https://mirror-pypi.runflare.com/simple/" in template

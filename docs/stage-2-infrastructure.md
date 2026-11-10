@@ -15,8 +15,9 @@ production deployment. The architecture and implementation guides are tracked at
 | Qdrant collection creation deferred | Embedding runtime output/dimension unverified | Stage 5 |
 | API liveness remains separate from dependency checks | Avoid reporting LLM/DB readiness when only HTTP works | Stage 2 |
 | Explicit environment-only passwords/API key | Avoid committing secrets and failing open in non-development config | Stage 2 |
+| Optional Runflare PyPI mirror | Resolve local Docker image Python dependencies despite incomplete/time-limited reads from pypi.org | Stage 2 development only |
 
-The implementation guide's Decision Log and Version History are synchronized in version 1.0.2. No approved product-level decision is changed by this development runbook.
+The implementation guide's Decision Log and Version History are synchronized in version 1.0.3. No approved product-level decision is changed by this development runbook.
 
 ## Prerequisites
 
@@ -32,6 +33,50 @@ The project path can be `D:\\chatbot-service-llm`. Persistent document storage
 defaults to `./storage` relative to Compose; customize
 `CHATBOT_STORAGE_HOST_PATH` in `.env` if needed.
 
+## Runflare mirror for local Docker builds
+
+Runflare documents its HTTPS Simple API at
+`https://mirror-pypi.runflare.com/simple/`:
+https://runflare.com/mirrors/pypi-mirror/ . This is an external, third-party
+package source; choose it only for trusted development dependency installs.
+Do not disable TLS certificate verification or use `--trusted-host`.
+
+The Dockerfile defaults to official PyPI. `compose.yaml` passes the optional
+`CHATBOT_PIP_INDEX_URL` to its `PIP_INDEX_URL` build argument. GitHub Actions
+and systems without an override continue using official PyPI. New `.env` files
+copied from `.env.example` select Runflare; existing `.env` files are not
+overwritten and require an explicit opt-in.
+
+Use the following in PowerShell to select Runflare for **this session only**,
+without exposing or changing credentials:
+
+```powershell
+Set-Location "D:\chatbot-service-llm"
+$env:CHATBOT_PIP_INDEX_URL = "https://mirror-pypi.runflare.com/simple/"
+docker compose config --quiet
+if ($LASTEXITCODE -ne 0) { throw "Invalid Compose configuration" }
+
+docker run --rm --entrypoint python python:3.12.16-slim-bookworm `
+    -m pip --isolated --disable-pip-version-check index versions fastapi `
+    --index-url https://mirror-pypi.runflare.com/simple/
+if ($LASTEXITCODE -ne 0) { throw "Runflare cannot resolve FastAPI from Docker" }
+
+docker compose up -d --build --wait
+if ($LASTEXITCODE -ne 0) { throw "Docker build/startup failed" }
+docker compose ps
+docker compose exec -T app python -m src.infrastructure.scripts.check_infrastructure
+```
+
+To make the choice persistent, add exactly one
+`CHATBOT_PIP_INDEX_URL=https://mirror-pypi.runflare.com/simple/` line to
+your existing private `.env`. Do not commit `.env`, overwrite existing
+credentials, or modify global pip settings. The mirror affects Docker image
+dependency installation, not model execution or network access by the app.
+Host-port overrides (`CHATBOT_APP_PORT`, `QDRANT_HOST_PORT`,
+`POSTGRES_HOST_PORT`) remain independent; use `docker compose ps` to determine
+the correct host health URL.
+
+---
 ## Safe initial setup (PowerShell)
 
 From the repository root, review `git status --short` before pulling.

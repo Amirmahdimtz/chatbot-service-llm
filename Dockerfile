@@ -5,8 +5,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
+# Python dependencies: allow a trusted local mirror for Docker builds.
+ARG PIP_INDEX_URL=https://pypi.org/simple/
 COPY requirements.txt .
-RUN python -m pip install --no-cache-dir -r requirements.txt \
+RUN python -m pip install --no-cache-dir --timeout 60 --index-url "$PIP_INDEX_URL" -r requirements.txt \
     && groupadd --gid 10001 chatbot \
     && useradd --uid 10001 --gid chatbot --no-create-home chatbot \
     && mkdir -p /app/storage /tmp \

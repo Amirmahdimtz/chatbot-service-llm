@@ -18,6 +18,8 @@ Key commands (after reviewing the runbook; the initializer creates missing crede
 
 ```powershell
 .\scripts\initialize-development-env.ps1
+# Use Runflare for the Docker build in this PowerShell session (existing .env is kept):
+$env:CHATBOT_PIP_INDEX_URL = "https://mirror-pypi.runflare.com/simple/"
 docker compose config --quiet
 docker compose up -d --build --wait
 docker compose exec -T app python -m src.infrastructure.scripts.check_infrastructure
@@ -36,8 +38,9 @@ project already uses ports 8000, 6333, or 5432, set separate
 `CHATBOT_APP_PORT`, `QDRANT_HOST_PORT`, and `POSTGRES_HOST_PORT`
 values in your private `.env`; do not stop unrelated containers.
 If pip inside Docker Build reports `(from versions: none)` for FastAPI,
-follow the runbook's Package Index network diagnostics before changing
-requirements.
+select Runflare via `CHATBOT_PIP_INDEX_URL` and test package resolution from a
+container before changing requirements. Official PyPI remains the default
+when no override is supplied, including CI; TLS verification remains enabled.
 
 Python unit/API tests use `requirements-dev.txt` and `python -m pytest -q`.
 GitHub Actions tests Python 3.11/3.12 and runs container infrastructure checks.

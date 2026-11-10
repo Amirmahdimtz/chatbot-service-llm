@@ -2,7 +2,7 @@
 
 > **نام فایل:** `Chatbot_Service_Implementation_Guide_FA.md`  
 > **پروژه:** `chatbot-service-llm`  
-> **نسخه سند:** `1.0.1`  
+> **نسخه سند:** `1.0.2`  
 > **تاریخ تدوین:** `2026-11-10`  
 > **وضعیت:** قرارداد محصول و تصمیم‌های معماری مورد توافق؛ برخی تنظیمات مدل و استقرار محلی تا زمان Benchmark قابل اصلاح هستند.  
 > **سند همراه و الزامی:** `Service_Architecture_Guide_FA.md`
@@ -779,6 +779,7 @@ storage:
 | 2026-11-10 | تست داده‌ها | Fixtureهای ساختگی و قرارداد Import برای داده واقعی سازمان | قطعی |
 | 2026-11-10 | Authentication/Approval | SSO و سیاست تصویب نهایی متعلق به سازمان؛ اتصال امن و تحلیل قابل تحویل | قطعی در حد مسئولیت |
 | 2026-11-10 | Stage 2 local infrastructure | Compose سه‌سرویسی، PostgreSQL 16.15، Qdrant 1.20.0، Storage جدا، Local llama.cpp و Health Check مستقل از Liveness | تصمیم اجرایی Development؛ اعتبارسنجی Windows باز |
+| 2026-11-10 | Stage 2 development credentials | آماده‌سازی idempotent و CRLF-safe فایل `.env`، حفظ Secret موجود و عدم نمایش Credential در خروجی | اصلاح راه‌اندازی Development |
 
 ---
 
@@ -806,5 +807,6 @@ LLM، Embedding و Reranking محلی، Runtime اصلی llama.cpp، Vector DB �
 |---|---|---|
 | `1.0.0` | `2026-11-10` | تدوین سند جامع از تصمیم‌های توافق‌شده درباره هسته چت‌بات، پنج سناریو، Agent داخلی، یک Deployment، LLM محلی، Qdrant، RAG، SSE، Storage، تست و سخت‌افزار محلی. |
 | `1.0.1` | `2026-11-10` | ثبت تصمیم‌های اجرایی Stage 2 برای Compose، Security، Persistent Storage، Runtime محلی و وضعیت آزمون Windows. |
+| `1.0.2` | `2026-11-10` | اصلاح مشکل سازگاری CRLF در آماده‌سازی Environment مرحله ۲، افزودن راه‌اندازی idempotent و اصلاح دستور اجرای llama.cpp در نشست مستقل PowerShell. |
 
 **پایان سند — این فایل باید در کنار `Service_Architecture_Guide_FA.md` نگهداری و با تصمیم‌های تأییدشده جدید نسخه‌بندی شود.**

@@ -14,9 +14,10 @@ running containers. It documents safe Windows PowerShell setup, environment
 variables, Windows Firewall/LLM access, non-destructive persistence checks,
 and log collection. Do not commit `.env`, passwords, user data or model files.
 
-Key commands (after reviewing the runbook and creating a valid `.env`):
+Key commands (after reviewing the runbook; the initializer creates missing credentials without replacing existing non-empty values):
 
 ```powershell
+.\scripts\initialize-development-env.ps1
 docker compose config --quiet
 docker compose up -d --build --wait
 docker compose exec -T app python -m src.infrastructure.scripts.check_infrastructure

@@ -49,3 +49,42 @@ jobs:
       - name: Stop containers without deleting volumes
         if: always()
         run: docker compose down
+
+  windows-env:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify CRLF-safe and idempotent environment initialization
+        shell: pwsh
+        run: |
+          $TestDir = Join-Path $env:RUNNER_TEMP "stage2-env-test"
+          New-Item -ItemType Directory -Force -Path $TestDir | Out-Null
+          $Template = Join-Path $TestDir ".env.example"
+          $EnvPath = Join-Path $TestDir ".env"
+          $Lines = Get-Content -LiteralPath ".env.example"
+          $Text = ($Lines -join "`r`n") + "`r`n"
+          $Utf8 = [System.Text.UTF8Encoding]::new($false)
+          [IO.File]::WriteAllText($Template, $Text, $Utf8)
+          & ./scripts/initialize-development-env.ps1 -EnvPath $EnvPath -TemplatePath $Template
+          $First = [IO.File]::ReadAllText($EnvPath)
+          foreach ($Name in @("POSTGRES_PASSWORD", "CHATBOT_LLM_API_KEY")) {
+              if (-not [regex]::IsMatch($First, "(?m)^" + $Name + "=[A-Za-z0-9_-]{43}`r?$")) {
+                  throw "$Name was not generated for CRLF environment"
+              }
+          }
+          & ./scripts/initialize-development-env.ps1 -EnvPath $EnvPath -TemplatePath $Template
+          if ($First -cne [IO.File]::ReadAllText($EnvPath)) {
+              throw "Re-running initialization changed existing credentials"
+          }
+          $ExistingEnv = Join-Path $TestDir "existing.env"
+          $Preset = $Text.Replace("POSTGRES_PASSWORD=`r`n", "POSTGRES_PASSWORD=preset_dev_credential`r`n")
+          [IO.File]::WriteAllText($ExistingEnv, $Preset, $Utf8)
+          & ./scripts/initialize-development-env.ps1 -EnvPath $ExistingEnv -TemplatePath $Template
+          $After = [IO.File]::ReadAllText($ExistingEnv)
+          if (-not $After.Contains("POSTGRES_PASSWORD=preset_dev_credential")) {
+              throw "Initialization unexpectedly replaced a non-empty password"
+          }
+          if (-not [regex]::IsMatch($After, "(?m)^CHATBOT_LLM_API_KEY=[A-Za-z0-9_-]{43}`r?$")) {
+              throw "Missing second generated secret"
+          }
+          Write-Host "CRLF, idempotence, and preservation checks passed."

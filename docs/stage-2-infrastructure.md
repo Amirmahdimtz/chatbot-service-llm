@@ -36,19 +36,20 @@ defaults to `./storage` relative to Compose; customize
 
 From the repository root, review `git status --short` before pulling.
 Run `git pull --ff-only origin main` only if the tree is clean.
-Copy `.env.example` to `.env` without overwriting an existing one, then
-generate a URL-safe password, for example:
+Initialize the development file with the repository script. It generates random
+URL-safe values for **empty** `POSTGRES_PASSWORD` and `CHATBOT_LLM_API_KEY`
+entries, handles Windows CRLF line endings, and leaves existing non-empty
+values unchanged. It never prints the credentials.
 
 ```powershell
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
-$Bytes = New-Object byte[] 32
-$Rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-try { $Rng.GetBytes($Bytes) } finally { $Rng.Dispose() }
-$Password = [Convert]::ToBase64String($Bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
-# Review .env before replacing the empty POSTGRES_PASSWORD field.
-(Get-Content .env) -replace '^POSTGRES_PASSWORD=$', "POSTGRES_PASSWORD=$Password" |
-    Set-Content -Encoding ascii .env
+.\\scripts\\initialize-development-env.ps1
+docker compose config --quiet
+if ($LASTEXITCODE -ne 0) { throw "Compose configuration failed; do not start services." }
 ```
+
+If an existing PostgreSQL named volume already contains data, do not rotate its
+previous password without checking that database's initialization history.
+Never delete the volume to solve an authentication failure.
 
 Do not share the resulting password or .env file. Passwords must be URL-safe
 because the development Compose configuration constructs an SQLAlchemy URL.
@@ -76,10 +77,26 @@ model from https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF. Check the selected
 binary/model version, license, and actual file path. Run `llama-server.exe --help`
 and `llama-server.exe --version` before selecting flags.
 
-Example, replacing both paths with actual ones:
+Use a **new PowerShell window** for the Windows-hosted server. All command
+variables are initialized in that same window; do not depend on variables set
+by previous sessions. The command reads the local secret without displaying it
+or putting it in the command-line arguments.
 
 ```powershell
-& 'D:\\llama.cpp\\llama-server.exe' -m 'D:\\models\\Qwen3-1.7B-Q4_K_M.gguf' --host 0.0.0.0 --port 8080 --threads 4 --ctx-size 2048 --parallel 1 --n-gpu-layers 0
+Set-Location "D:\\chatbot-service-llm"
+$LlamaExecutable = (Get-Command llama-server.exe -ErrorAction Stop).Source
+$ModelPath = "D:\\models\\Qwen3-1.7B-Q4_K_M.gguf"
+if (-not (Test-Path -LiteralPath $LlamaExecutable -PathType Leaf)) { throw "llama-server.exe is missing" }
+if (-not (Test-Path -LiteralPath $ModelPath -PathType Leaf)) { throw "GGUF model is missing" }
+
+$KeyLine = Get-Content -LiteralPath ".env" |
+    Where-Object { $_ -match '^CHATBOT_LLM_API_KEY=' } |
+    Select-Object -First 1
+if (-not $KeyLine) { throw "Missing CHATBOT_LLM_API_KEY in .env" }
+$env:LLAMA_API_KEY = $KeyLine.Substring("CHATBOT_LLM_API_KEY=".Length)
+if (-not $env:LLAMA_API_KEY) { throw "The LLM API key is empty" }
+
+& $LlamaExecutable -m $ModelPath --host 0.0.0.0 --port 8080 --threads 4 --ctx-size 2048 --parallel 1 --n-gpu-layers 0
 ```
 
 **Security:** `0.0.0.0` is needed for host-to-container reachability on some
@@ -91,7 +108,8 @@ Never use this setup as production exposure. Check the actual firewall state
 before running; prefer a narrower host interface if supported.
 
 ```powershell
-Invoke-WebRequest http://127.0.0.1:8080/health
+$Headers = @{ Authorization = "Bearer $env:LLAMA_API_KEY" }
+Invoke-RestMethod -Uri http://127.0.0.1:8080/health -Headers $Headers
 docker compose exec -T app python -m src.infrastructure.scripts.check_infrastructure --llm
 ```
 
@@ -119,3 +137,19 @@ storage. No app schema exists yet; do not autogenerate or apply empty migrations
 For incidents, collect *sanitized* `docker compose ps`, `docker compose config --services`,
 `docker compose logs --tail 80`, and infrastructure check output.
 Never paste `docker compose config` in full: it expands secret values.
+
+
+## Troubleshooting: Compose variable interpolation
+
+If Compose reports that `POSTGRES_PASSWORD` is missing, it has not
+started the project services. This often happens when a CRLF `.env` file
+was edited with a raw-text regex ending in `=$`; the carriage-return
+prevents matching the empty value. Re-run `scripts/initialize-development-env.ps1`
+and check `docker compose config --quiet` before `up`. Do not print
+`docker compose config` without `--quiet`, as its output includes secrets.
+
+A 200 response from localhost port 6333 or a 404 from 8000 **before Compose
+startup** does not establish that these endpoints belong to this project.
+Inspect `docker ps` and `docker compose ps`. If host ports are occupied by
+unrelated applications, choose alternative `QDRANT_HOST_PORT` or
+`CHATBOT_APP_PORT` values in `.env`; keep internal container ports unchanged.

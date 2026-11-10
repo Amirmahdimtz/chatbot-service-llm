@@ -13,7 +13,7 @@ class ChatRequestDto(BaseModel):
 
     message: str = Field(min_length=1, max_length=1000, description="One user message; no history in stage 3")
     conversation_id: UUID | None = Field(
-        default=None, description="Reserved for stage 4; non-null IDs are rejected until ownership is enforced"
+        default=None, strict=False, description="Reserved for stage 4; non-null IDs are rejected until ownership is enforced"
     )
 
     @field_validator("message")

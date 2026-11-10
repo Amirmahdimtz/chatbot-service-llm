@@ -1,0 +1,7 @@
+app:
+  name: Chatbot Service (Development)
+  version: 0.1.0
+api:
+  prefix: /api/v1
+database:
+  url: ""

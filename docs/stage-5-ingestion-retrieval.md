@@ -241,12 +241,26 @@ or database and does not depend on a running Compose stack.
 
 ```powershell
 Test-NetConnection deb.debian.org -Port 443
-docker run --rm --entrypoint sh python:3.12.16-slim-bookworm -c 'apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update'
+$AptProbe = @'
+from pathlib import Path
+import subprocess
+source = Path("/etc/apt/sources.list.d/debian.sources")
+source.write_text(source.read_text().replace("http://deb.debian.org/", "https://deb.debian.org/"))
+raise SystemExit(subprocess.run([
+    "apt-get", "-o", "APT::Update::Error-Mode=any",
+    "-o", "Acquire::Retries=0", "-o", "Acquire::https::Timeout=15",
+    "update"
+], check=False).returncode)
+'@
+$AptProbe | docker run --rm -i --entrypoint python python:3.12.16-slim-bookworm -
+"Strict APT exit code: $LASTEXITCODE"
 ```
 
 The Dockerfile now defaults to HTTPS for official Debian repositories,
 limits each APT transfer timeout and retry count, and supports optional
-build-time mirror URLs. If container connectivity fails, inspect Docker
+build-time mirror URLs. APT index refresh runs with
+`APT::Update::Error-Mode=any`, ensuring that failed or partial repository
+updates stop the image build before installing packages. If container connectivity fails, inspect Docker
 Desktop's **Settings > Resources > Proxies** (actual UI may vary), VPN,
 proxy and DNS settings. A browser or host-side network check alone does
 not prove the Docker build network is healthy. Do not disable TLS
@@ -267,6 +281,16 @@ docker compose build --progress plain app
 if ($LASTEXITCODE -ne 0) { throw "Image build failed; examine the first APT error" }
 docker compose up -d --wait
 ```
+
+If a proposed mirror returns `Certificate verification failed` or
+`The name in the certificate does not match the expected`, reject that
+mirror. A mirror present on Debian's public list is not necessarily
+configured for HTTPS under every alias. Probe candidate mirror URLs with
+normal TLS validation before setting build arguments. Do not use
+`Verify-Peer=false`, `trusted=yes`, or `--allow-unauthenticated`.
+A healthy pre-existing Compose app container may still run an older image
+after a failed build: check that the Stage 5 service module is actually
+present after a successful build.
 
 If the HTTPS probe succeeds but the build still stalls, capture the
 first `Err:` / `Temporary failure resolving` / `Certificate` /

@@ -20,7 +20,7 @@ RUN set -eu; \
         -e "s|http://deb.debian.org/debian-security|$APT_SECURITY_MIRROR_URL|g" \
         -e "s|http://deb.debian.org/debian|$APT_DEBIAN_MIRROR_URL|g" \
         /etc/apt/sources.list.d/debian.sources; \
-    apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update; \
+    apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update; \
     apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
         install -y --no-install-recommends \
         libreoffice-writer tesseract-ocr tesseract-ocr-fas tesseract-ocr-eng; \

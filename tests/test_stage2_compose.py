@@ -71,6 +71,8 @@ def test_stage5_apt_downloads_are_bounded_and_mirrors_configurable():
     assert "ARG APT_DEBIAN_MIRROR_URL=https://deb.debian.org/debian" in dockerfile
     assert "ARG APT_SECURITY_MIRROR_URL=https://deb.debian.org/debian-security" in dockerfile
     assert "Acquire::Retries=2" in dockerfile
+    # Fail the build when an APT index fails instead of proceeding with a partial index.
+    assert "apt-get -o APT::Update::Error-Mode=any" in dockerfile
     assert "Acquire::https::Timeout=30" in dockerfile
     assert "Acquire::http::Timeout=30" in dockerfile
     assert "trusted=yes" not in dockerfile and "--allow-unauthenticated" not in dockerfile

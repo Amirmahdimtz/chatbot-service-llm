@@ -1,6 +1,7 @@
 """Regression tests: stream lifecycle, sanitized failures and durable terminal state."""
 from uuid import uuid4
 
+import anyio
 import pytest
 
 from src.core.services.chat.chat_identity_service import ChatIdentity
@@ -95,4 +96,27 @@ async def test_close_after_delta_marks_cancelled_and_preserves_partial_text():
     assert (await anext(stream)).name == "message_start"
     assert (await anext(stream)).name == "delta"
     await stream.aclose()
+    assert conversations.results == [("cancelled", "سلام")]
+
+
+@pytest.mark.asyncio
+async def test_cancel_scope_does_not_interrupt_terminal_db_cleanup():
+    """Real disconnect cancellation must not abort persistence at an await."""
+    class SlowConversationStub(ConversationStub):
+        async def finalize_async(self, message_id, identity, status, content):
+            await anyio.sleep(0)  # Cancellation checkpoint, like an async DB commit.
+            return await super().finalize_async(message_id, identity, status, content)
+
+    conversations = SlowConversationStub()
+    stream = ChatService(StreamProvider(["سلام", " دنیا"]), Config(), conversations).stream_async(
+        "سلام", uuid4(), uuid4(), uuid4(), IDENTITY
+    )
+    async with anyio.create_task_group() as group:
+        async def disconnect_async():
+            assert (await anext(stream)).name == "message_start"
+            assert (await anext(stream)).name == "delta"
+            group.cancel_scope.cancel()
+            await stream.aclose()
+
+        group.start_soon(disconnect_async)
     assert conversations.results == [("cancelled", "سلام")]

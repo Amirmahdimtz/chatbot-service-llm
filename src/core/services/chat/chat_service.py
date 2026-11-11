@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from anyio import CancelScope
 from uuid import UUID
 
 from src.core.services.chat.chat_identity_service import ChatIdentity
@@ -105,14 +106,19 @@ class ChatService:
                 "request_id": str(request_id), "message_id": str(message_id), "status": "failed",
             })
         finally:
-            if iterator is not None:
-                await iterator.aclose()
-            if status is None:
-                # Cancellation/stream closure must never persist partial text as success.
+            # AnyIO/Starlette cancellation propagates into ordinary awaits in finally.
+            # Shield both the terminal DB write and upstream cleanup. Update the
+            # persisted status first, even if closing the LLM stream raises.
+            with CancelScope(shield=True):
                 try:
-                    await self._conversations.finalize_async(
-                        str(message_id), identity, "cancelled", "".join(chunks)
-                    )
-                except Exception:
-                    # A transient DB failure leaves an explicitly non-completed streaming row.
-                    pass
+                    if status is None:
+                        try:
+                            await self._conversations.finalize_async(
+                                str(message_id), identity, "cancelled", "".join(chunks)
+                            )
+                        except Exception:
+                            # DB outages must not accidentally mark partial output completed.
+                            pass
+                finally:
+                    if iterator is not None:
+                        await iterator.aclose()

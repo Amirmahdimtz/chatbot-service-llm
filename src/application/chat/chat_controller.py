@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from uuid import UUID, uuid4
 
+from anyio import CancelScope
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -64,7 +65,10 @@ class ChatController:
                             break
                         yield encode_sse(event.name, event.payload)
                 finally:
-                    await iterator.aclose()
+                    # Starlette cancels the response task when the client disconnects.
+                    # Shield generator closure so the Core terminal update can finish.
+                    with CancelScope(shield=True):
+                        await iterator.aclose()
 
             return StreamingResponse(
                 stream_events_async(), media_type="text/event-stream",

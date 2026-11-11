@@ -192,3 +192,62 @@ def test_auth_and_spoofing_and_pagination_are_fail_closed(app):
         for url in ("/api/v1/conversation/?limit=0", "/api/v1/knowledge/?limit=999"):
             invalid = client.get(url, headers=HEADERS)
             assert invalid.status_code == 422 and invalid.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+@pytest.mark.asyncio
+async def test_actual_asgi_disconnect_stops_llm_and_persists_cancelled(app, monkeypatch):
+    """Test a receive-side HTTP disconnect, not only a manually closed generator."""
+    upstream_closed = asyncio.Event()
+
+    async def suspended_llm_async(self, message, history=None):
+        try:
+            yield "سلام"
+            await asyncio.Event().wait()
+        finally:
+            upstream_closed.set()
+
+    monkeypatch.setattr(llama_cpp_provider.LlamaCppProvider, "stream_chat_async", suspended_llm_async)
+    body = json.dumps({"message": "سلام"}, ensure_ascii=False).encode("utf-8")
+    request_sent = False
+    disconnected = asyncio.Event()
+    response_chunks = []
+
+    async def receive():
+        nonlocal request_sent
+        if not request_sent:
+            request_sent = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        await disconnected.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message):
+        if message["type"] == "http.response.body":
+            chunk = message.get("body", b"").decode("utf-8")
+            response_chunks.append(chunk)
+            if chunk.startswith("event: delta\\n"):
+                disconnected.set()
+
+    scope = {
+        "type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1", "method": "POST", "scheme": "http",
+        "path": "/api/v1/chat/stream", "raw_path": b"/api/v1/chat/stream",
+        "root_path": "", "query_string": b"",
+        "headers": [(b"host", b"localhost"), (b"authorization", HEADERS["Authorization"].encode()),
+                    (b"content-type", b"application/json")],
+        "server": ("localhost", 80), "client": ("127.0.0.1", 51234),
+    }
+    await asyncio.wait_for(app(scope, receive, send), timeout=8)
+    assert disconnected.is_set()
+    assert upstream_closed.is_set()
+    start_event = next(chunk for chunk in response_chunks if chunk.startswith("event: message_start\\n"))
+    start = json.loads(start_event.split("data: ", 1)[1])
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                 base_url="http://localhost") as client:
+        history = await client.get(f"/api/v1/conversation/{start['conversation_id']}", headers=HEADERS)
+    assert history.status_code == 200
+    messages = history.json()["messages"]
+    assistant = next(item for item in messages if item["id"] == start["message_id"])
+    assert assistant["status"] == "cancelled"
+    assert assistant["content"] == "سلام"
+    assert messages[0]["content"] == "سلام"

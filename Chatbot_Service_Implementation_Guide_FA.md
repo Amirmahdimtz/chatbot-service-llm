@@ -512,7 +512,7 @@ Upload
 - رویدادهای پیشنهادی: `message_start`، `delta`، `sources`، `tool_start`، `tool_result`، `message_end`، `error`.
 - Eventهای `tool_result` باید به اطلاعات مورد نیاز نمایش محدود باشند؛ Prompt داخلی، داده خام حساس، tokenها و secretها افشا نشوند.
 - پس از آغاز Stream، خطا دیگر الزاماً با HTTP status جدید قابل ارسال نیست؛ باید با رویداد `error` کنترل‌شده و وضعیت نهایی پیام گزارش شود.
-- Cancellation/Disconnect باید تولید LLM، Toolها و مصرف منابع را تا حد امکان متوقف و وضعیت ذخیره پیام را سازگار کند.
+- Cancellation/Disconnect باید تولید LLM، Toolها و مصرف منابع را تا حد امکان متوقف و وضعیت ذخیره پیام را سازگار کند. در Starlette/AnyIO، cleanup ذخیره وضعیت نهایی و بستن Generator باید در `CancelScope(shield=True)` انجام شود تا لغو Task جلوی commit وضعیت `cancelled` را نگیرد.
 - Rate limit و concurrency limit برای مدل CPU-bound ضروری است؛ صف/Busy response مشخص و قابل تست باشد.
 - استفاده از `async` نباید عملیات CPU-bound سنگین را روی Event Loop اصلی مسدود کند؛ پردازش اسناد و Inference با سرویس/worker یا Runtime مناسب انجام شود.
 
@@ -813,6 +813,7 @@ storage:
 | 2026-11-10 | تست داده‌ها | Fixtureهای ساختگی و قرارداد Import برای داده واقعی سازمان | قطعی |
 | 2026-11-10 | Authentication/Approval | SSO و سیاست تصویب نهایی متعلق به سازمان؛ اتصال امن و تحلیل قابل تحویل | قطعی در حد مسئولیت |
 | 2026-11-11 | Stage 4 Persistence | UUID متنی، ترتیب اتمیک Turn، Streaming status و History با Ownership و Audience در PostgreSQL | پیاده‌سازی مرحله ۴ |
+| 2026-11-11 | Stage 4 SSE disconnect cleanup | محافظت از commit وضعیت `cancelled` و بستن LLM generator با AnyIO shield در لغو ASGI Task؛ تست واقعی disconnect در ASGI | اصلاح رگرسیون مرحله ۴؛ نیازمند تأیید Windows |
 | 2026-11-11 | Feedback | تنها پیام completed متعلق به مالک؛ یک بازخورد برای هر actor/message؛ تکرار HTTP 409 | پیاده‌سازی مرحله ۴ |
 | 2026-11-11 | Knowledge Metadata | ثبت Metadata بدون Upload/Indexing؛ وضعیت registered، نسخه ۱، دسترسی محدود به مالک و Audience | مرز مرحله ۴/۵ |
 | 2026-11-11 | Conversation Deletion | تا تعیین سیاست Retention، Endpoint حذف فعال نمی‌شود | تصمیم ایمن موقت |
@@ -850,6 +851,7 @@ LLM، Embedding و Reranking محلی، Runtime اصلی llama.cpp، Vector DB �
 | نسخه | تاریخ | تغییر |
 |---|---|---|
 | `1.0.0` | `2026-11-10` | تدوین سند جامع از تصمیم‌های توافق‌شده درباره هسته چت‌بات، پنج سناریو، Agent داخلی، یک Deployment، LLM محلی، Qdrant، RAG، SSE، Storage، تست و سخت‌افزار محلی. |
+| `1.1.1` | `2026-11-11` | رفع مشکل ماندن پیام SSE در وضعیت `streaming` هنگام client disconnect با shield در cleanup و تست لغو ASGI؛ ثبت تفاوت نمایش JSON فارسی در PowerShell 5.1. |
 | `1.1.0` | `2026-11-11` | ثبت قراردادهای واقعی Stage 4 برای Conversation History، وضعیت SSE، Feedback، Knowledge Metadata، Scope، Migration و Retention. |
 | `1.0.1` | `2026-11-10` | ثبت تصمیم‌های اجرایی Stage 2 برای Compose، Security، Persistent Storage، Runtime محلی و وضعیت آزمون Windows. |
 | `1.0.2` | `2026-11-10` | اصلاح مشکل سازگاری CRLF در آماده‌سازی Environment مرحله ۲، افزودن راه‌اندازی idempotent و اصلاح دستور اجرای llama.cpp در نشست مستقل PowerShell. |

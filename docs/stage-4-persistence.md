@@ -169,7 +169,32 @@ Ensure Windows-hosted `llama.cpp` is healthy before SSE tests:
 `docker compose exec -T app python -m src.infrastructure.scripts.check_infrastructure --llm`.
 After cancellation, observe `cancelled` (possibly delayed briefly because
 disconnect detection depends on ASGI/network behavior). A client may not
-receive `message_end` when it disconnects.
+receive `message_end` when it disconnects. Starlette cancels the streaming
+task on disconnect; Core and Application explicitly shield the terminal
+database update and generator closure so they are not cancelled mid-await.
+
+Windows PowerShell 5.1 can misinterpret a UTF-8 JSON response lacking an
+explicit charset as Latin-1. Garbled Persian in `Invoke-RestMethod` output
+alone does **not** prove database corruption. For an explicit UTF-8 check:
+
+```powershell
+Add-Type -AssemblyName System.Net.Http
+$Client = [System.Net.Http.HttpClient]::new()
+try {
+    $Client.DefaultRequestHeaders.Authorization =
+        [System.Net.Http.Headers.AuthenticationHeaderValue]::new("Bearer", $Token)
+    $Raw = $Client.GetByteArrayAsync("$Api/api/v1/conversation/$ConversationId").GetAwaiter().GetResult()
+    $Decoded = [System.Text.Encoding]::UTF8.GetString($Raw) | ConvertFrom-Json
+    $Decoded.messages | Select-Object role, status, content
+}
+finally {
+    $Client.Dispose()
+}
+```
+
+Use the synthetic development token loaded into `$Token` above; never print
+or paste that token. Previously persisted `streaming` rows from an interrupted
+pre-fix request are not silently rewritten: only new disconnects validate the fix.
 
 ## Evidence to send back
 

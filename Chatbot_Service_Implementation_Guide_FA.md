@@ -2,7 +2,7 @@
 
 > **نام فایل:** `Chatbot_Service_Implementation_Guide_FA.md`  
 > **پروژه:** `chatbot-service-llm`  
-> **نسخه سند:** `1.2.0`  
+> **نسخه سند:** `1.2.1`  
 > **تاریخ تدوین:** `2026-11-10`  
 > **وضعیت:** قرارداد محصول و تصمیم‌های معماری مورد توافق؛ برخی تنظیمات مدل و استقرار محلی تا زمان Benchmark قابل اصلاح هستند.  
 > **سند همراه و الزامی:** `Service_Architecture_Guide_FA.md`
@@ -843,6 +843,8 @@ storage:
 | 2026-11-11 | Stage 5 retrieval | Dense + Lexical sparse با Qdrant named vectors، Fusion از نوع RRF، Reranking محلی، بررسی Visibility/Version مجدد در PostgreSQL | پیاده‌سازی اولیه؛ Benchmark فارسی باز |
 | 2026-11-11 | Stage 5 knowledge access | Metadata مالک‌محور مرحله ۴ حفظ شد؛ انتشار دانش Public نیازمند Permission مستقل و Internal بر اساس Tenant/Permission تفکیک می‌شود | قرارداد امنیتی Stage 5 |
 
+| 2026-11-11 | Stage 5 Debian APT connectivity | تنظیم پیش‌فرض HTTPS برای مخازن Debian، محدودسازی Retry/Timeout و افزودن امکان انتخاب Mirror معتبر بدون دورزدن امضای APT؛ برای اختلال شبکه Docker Desktop | اصلاح راه‌اندازی؛ تأیید Windows باز |
+
 ---
 
 ## ۲۰. دستور آماده برای استفاده در گفتگوهای آینده
@@ -868,6 +870,7 @@ LLM، Embedding و Reranking محلی، Runtime اصلی llama.cpp، Vector DB �
 | نسخه | تاریخ | تغییر |
 |---|---|---|
 | `1.0.0` | `2026-11-10` | تدوین سند جامع از تصمیم‌های توافق‌شده درباره هسته چت‌بات، پنج سناریو، Agent داخلی، یک Deployment، LLM محلی، Qdrant، RAG، SSE، Storage، تست و سخت‌افزار محلی. |
+| `1.2.1` | `2026-11-11` | اصلاح Download وابستگی‌های Stage 5 در Dockerfile: Debian HTTPS، Retry/Timeout و Mirror اختیاری؛ مستندات تشخیص مشکل شبکه Docker Desktop. |
 | `1.2.0` | `2026-11-11` | ثبت قرارداد اجرایی مرحله ۵ درباره Parser/OCR، Storage، Embedding، Qdrant Hybrid+RRF، Reranking، Retrieval Access، Version/Retry و محدودیت Benchmark محلی. |
 | `1.1.1` | `2026-11-11` | رفع مشکل ماندن پیام SSE در وضعیت `streaming` هنگام client disconnect با shield در cleanup و تست لغو ASGI؛ ثبت تفاوت نمایش JSON فارسی در PowerShell 5.1. |
 | `1.1.0` | `2026-11-11` | ثبت قراردادهای واقعی Stage 4 برای Conversation History، وضعیت SSE، Feedback، Knowledge Metadata، Scope، Migration و Retention. |

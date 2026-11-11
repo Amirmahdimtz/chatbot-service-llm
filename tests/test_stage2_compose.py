@@ -60,3 +60,17 @@ def test_pip_index_build_argument_and_local_mirror_template():
     assert "--trusted-host" not in dockerfile
     template = (ROOT / ".env.example").read_text(encoding="utf-8")
     assert "CHATBOT_PIP_INDEX_URL=https://mirror-pypi.runflare.com/simple/" in template
+
+
+def test_stage5_apt_downloads_are_bounded_and_mirrors_configurable():
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    compose = yaml.safe_load((ROOT / "compose.yaml").read_text(encoding="utf-8"))
+    args = compose["services"]["app"]["build"]["args"]
+    assert args["APT_DEBIAN_MIRROR_URL"] == "${CHATBOT_APT_DEBIAN_MIRROR_URL:-https://deb.debian.org/debian}"
+    assert args["APT_SECURITY_MIRROR_URL"] == "${CHATBOT_APT_SECURITY_MIRROR_URL:-https://deb.debian.org/debian-security}"
+    assert "ARG APT_DEBIAN_MIRROR_URL=https://deb.debian.org/debian" in dockerfile
+    assert "ARG APT_SECURITY_MIRROR_URL=https://deb.debian.org/debian-security" in dockerfile
+    assert "Acquire::Retries=2" in dockerfile
+    assert "Acquire::https::Timeout=30" in dockerfile
+    assert "Acquire::http::Timeout=30" in dockerfile
+    assert "trusted=yes" not in dockerfile and "--allow-unauthenticated" not in dockerfile

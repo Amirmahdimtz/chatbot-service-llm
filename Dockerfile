@@ -8,9 +8,23 @@ WORKDIR /app
 # Python dependencies: allow a trusted local mirror for Docker builds.
 ARG PIP_INDEX_URL=https://pypi.org/simple/
 # Local legacy-Word conversion and Persian OCR, no cloud document service.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libreoffice-writer tesseract-ocr tesseract-ocr-fas tesseract-ocr-eng \
-    && rm -rf /var/lib/apt/lists/*
+# Optional mirrors and bounded retries prevent indefinite Debian repository stalls.
+ARG APT_DEBIAN_MIRROR_URL=https://deb.debian.org/debian
+ARG APT_SECURITY_MIRROR_URL=https://deb.debian.org/debian-security
+RUN set -eu; \
+    for mirror in "$APT_DEBIAN_MIRROR_URL" "$APT_SECURITY_MIRROR_URL"; do \
+        case "$mirror" in https://*|http://*) ;; *) echo "Invalid APT mirror URL" >&2; exit 2 ;; esac; \
+        case "$mirror" in *[!a-zA-Z0-9:/._-]*) echo "Invalid APT mirror URL" >&2; exit 2 ;; esac; \
+    done; \
+    sed -i \
+        -e "s|http://deb.debian.org/debian-security|$APT_SECURITY_MIRROR_URL|g" \
+        -e "s|http://deb.debian.org/debian|$APT_DEBIAN_MIRROR_URL|g" \
+        /etc/apt/sources.list.d/debian.sources; \
+    apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update; \
+    apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
+        install -y --no-install-recommends \
+        libreoffice-writer tesseract-ocr tesseract-ocr-fas tesseract-ocr-eng; \
+    rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 RUN python -m pip install --no-cache-dir --timeout 60 --index-url "$PIP_INDEX_URL" -r requirements.txt \
     && groupadd --gid 10001 chatbot \

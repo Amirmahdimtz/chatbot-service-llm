@@ -7,6 +7,8 @@ services:
       dockerfile: Dockerfile
       args:
         PIP_INDEX_URL: "${CHATBOT_PIP_INDEX_URL:-https://pypi.org/simple/}"
+        APT_DEBIAN_MIRROR_URL: "${CHATBOT_APT_DEBIAN_MIRROR_URL:-https://deb.debian.org/debian}"
+        APT_SECURITY_MIRROR_URL: "${CHATBOT_APT_SECURITY_MIRROR_URL:-https://deb.debian.org/debian-security}"
     init: true
     restart: unless-stopped
     stop_grace_period: 20s

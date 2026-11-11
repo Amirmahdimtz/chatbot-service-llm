@@ -223,6 +223,59 @@ exclude it from pasted logs. Inspect the GET status and the
 `knowledge_public` collection through Qdrant. Do **not** manually
 write to `knowledge_internal` using the synthetic public token.
 
+## Troubleshooting stalled Debian APT downloads on Windows
+
+The Stage 5 Docker image installs LibreOffice and Tesseract from Debian.
+If `docker compose up -d --build --wait` pauses at
+`RUN apt-get update && apt-get install ...` with repeated `Ign:`
+messages from `deb.debian.org`, the immediate failure is external
+repository connectivity during **image build**, not Python, Alembic or
+Qdrant. Docker Desktop might use a proxy even when Windows host
+connectivity succeeds. Do not remove volumes or bypass APT signature
+verification.
+
+First interrupt only the active build with Ctrl+C (existing persisted
+data is unaffected), then check HTTPS reachability from Windows and
+from a disposable container. This diagnostic does not modify the app
+or database and does not depend on a running Compose stack.
+
+```powershell
+Test-NetConnection deb.debian.org -Port 443
+docker run --rm --entrypoint sh python:3.12.16-slim-bookworm -c 'apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update'
+```
+
+The Dockerfile now defaults to HTTPS for official Debian repositories,
+limits each APT transfer timeout and retry count, and supports optional
+build-time mirror URLs. If container connectivity fails, inspect Docker
+Desktop's **Settings > Resources > Proxies** (actual UI may vary), VPN,
+proxy and DNS settings. A browser or host-side network check alone does
+not prove the Docker build network is healthy. Do not disable TLS
+verification or set `trusted=yes` in APT sources.
+
+If the official endpoints are genuinely unavailable but an authorized
+trusted Debian mirror is reachable, pass both appropriate repository
+URLs by setting `CHATBOT_APT_DEBIAN_MIRROR_URL` and
+`CHATBOT_APT_SECURITY_MIRROR_URL` in a PowerShell session (or in your
+uncommitted private `.env`). Do not substitute a PyPI mirror for Debian
+APT repositories. Use the actual mirror URLs, not illustrative values.
+
+```powershell
+# Optional: only after verifying each trusted replacement URL.
+# $env:CHATBOT_APT_DEBIAN_MIRROR_URL = "https://YOUR-DEBIAN-MIRROR/debian"
+# $env:CHATBOT_APT_SECURITY_MIRROR_URL = "https://YOUR-DEBIAN-SECURITY-MIRROR/debian-security"
+docker compose build --progress plain app
+if ($LASTEXITCODE -ne 0) { throw "Image build failed; examine the first APT error" }
+docker compose up -d --wait
+```
+
+If the HTTPS probe succeeds but the build still stalls, capture the
+first `Err:` / `Temporary failure resolving` / `Certificate` /
+`Connection timed out` line with `--progress plain`. Share
+redacted errors, `docker compose ps` and Docker Desktop proxy status;
+never share credentials or complete private proxy URLs.
+
+---
+
 ## Testing and remaining acceptance evidence
 
 - Unit tests exercise six Python-native formats, invalid files, legacy

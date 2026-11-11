@@ -224,7 +224,7 @@ async def test_actual_asgi_disconnect_stops_llm_and_persists_cancelled(app, monk
         if message["type"] == "http.response.body":
             chunk = message.get("body", b"").decode("utf-8")
             response_chunks.append(chunk)
-            if chunk.startswith("event: delta\\n"):
+            if chunk.startswith("event: delta\n"):
                 disconnected.set()
 
     scope = {
@@ -239,7 +239,7 @@ async def test_actual_asgi_disconnect_stops_llm_and_persists_cancelled(app, monk
     await asyncio.wait_for(app(scope, receive, send), timeout=8)
     assert disconnected.is_set()
     assert upstream_closed.is_set()
-    start_event = next(chunk for chunk in response_chunks if chunk.startswith("event: message_start\\n"))
+    start_event = next(chunk for chunk in response_chunks if chunk.startswith("event: message_start\n"))
     start = json.loads(start_event.split("data: ", 1)[1])
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),

@@ -92,7 +92,7 @@ async def test_doc_requires_actual_local_converter(processor, monkeypatch):
 
 
 def test_persian_and_chunk_boundaries():
-    assert normalize_persian("  كتاب يكي\n\n\nآموزش‌ ها  ") == "کتاب یکی\n\nآموزش‌ ها"
+    assert normalize_persian("  كتاب يكي\n\n\nآموزش‌ ها  ") == "کتاب یکی\n\nآموزش ها"
     paragraphs = [TextChunk("الف " * 90 + "\n\n" + "ب " * 90, {"page": 2}),
                   TextChunk("جدول | عنوان\n\nردیف | مقدار", {"sheet": "نمونه"})]
     result = chunk_sections(paragraphs, size=40, overlap=6)

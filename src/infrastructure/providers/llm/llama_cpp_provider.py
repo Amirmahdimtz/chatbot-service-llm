@@ -22,7 +22,7 @@ class LlmStreamError(RuntimeError):
 
 @inject
 class LlamaCppProvider:
-    __di_singleton__ = True  # Limit CPU inference across injected ChatService instances.
+    __di_singleton__ = True
 
     def __init__(self, config_reader: ConfigReader) -> None:
         url = config_reader.get("llm.base_url")
@@ -53,11 +53,9 @@ class LlamaCppProvider:
         return await self.readiness_status_async() == "ready"
 
     async def readiness_status_async(self) -> str:
-        """Return only bounded diagnostic codes; never return upstream bodies or URLs."""
         if not self._base_url:
             return "not_configured"
         try:
-            # Inference timeout can be long; readiness must fail promptly.
             async with httpx.AsyncClient(
                 timeout=min(self._timeout, 10.0), trust_env=False, headers=self._headers()
             ) as client:
@@ -68,7 +66,6 @@ class LlamaCppProvider:
                     return "model_loading"
                 if health.status_code != 200:
                     return "health_error"
-
                 models = await client.get(f"{self._base_url}/v1/models")
                 if models.status_code in (401, 403):
                     return "unauthorized"
@@ -88,28 +85,22 @@ class LlamaCppProvider:
         except httpx.RequestError:
             return "network_error"
 
-    async def stream_chat_async(self, message: str) -> AsyncIterator[str]:
+    async def stream_chat_async(
+        self, message: str, history: list[dict[str, str]] | None = None
+    ) -> AsyncIterator[str]:
         if not self._base_url:
             raise LlmStreamError("LLM_UNAVAILABLE")
-        # Never queue CPU inference indefinitely; a busy model yields a structured SSE error.
         try:
             await asyncio.wait_for(self._slots.acquire(), timeout=0.02)
         except TimeoutError as exc:
             raise LlmStreamError("LLM_BUSY") from exc
         try:
-            body: dict = {
-                "messages": [
-                    {"role": "system", "content": "Be helpful and accurate. Respond in Persian to Persian questions."},
-                    {"role": "user", "content": message},
-                ],
-                "stream": True,
-                "max_tokens": self._max_tokens,
-            }
+            messages = [{"role": "system", "content": "Be helpful and accurate. Respond in Persian to Persian questions."}]
+            if history:
+                messages.extend(history)
+            messages.append({"role": "user", "content": message})
+            body: dict = {"messages": messages, "stream": True, "max_tokens": self._max_tokens}
             if not self._enable_thinking:
-                # Qwen3 defaults to thinking. On a small CPU token budget, all
-                # tokens can be spent on reasoning_content and no answer text.
-                # Also start recent llama.cpp with --reasoning off: newer
-                # versions may ignore this per-request template override.
                 body["chat_template_kwargs"] = {"enable_thinking": False}
             if self._model_name:
                 body["model"] = self._model_name

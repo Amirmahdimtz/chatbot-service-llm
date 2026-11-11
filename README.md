@@ -1,9 +1,14 @@
 # chatbot-service-llm
 
-Stage 3 adds authenticated (synthetic-development-only) **one-shot** Chat SSE from a
-Windows-hosted local `llama.cpp` model, with bounded concurrency and safe stream errors.
-Conversation DTOs are defined but **no conversation/history routes or persistence exist yet**;
-they are stage 4 work. Production Chat fails closed until a trusted identity integration exists.
+Stage 4 introduces persistent PostgreSQL conversations and message history, with
+ownership/audience filtering, authenticated Feedback, and document metadata
+registration. Stage 3 SSE streaming is now persisted; a partial response is
+never marked completed. Document metadata is **registered**, not uploaded,
+extracted, or indexed; the ingestion pipeline is Stage 5.
+
+See [Stage 4 persistence runbook](docs/stage-4-persistence.md) for the
+API contracts, Alembic revision, CI/integration verification, and Windows
+PowerShell commands. Production remains fail-closed without trusted identity.
 
 The local SSE PowerShell smoke test stores its synthetic Persian prompt as
 ASCII JSON Unicode escapes for compatibility with Windows PowerShell 5.1.

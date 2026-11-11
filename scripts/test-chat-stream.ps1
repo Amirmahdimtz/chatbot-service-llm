@@ -5,7 +5,8 @@ Never echo credentials or pass them via command-line arguments.
 [CmdletBinding()]
 param(
     [string]$ApiUrl = "http://127.0.0.1:18000/api/v1/chat/stream",
-    [switch]$CancelAfterFirstDelta
+    [switch]$CancelAfterFirstDelta,
+    [string]$ConversationId
 )
 
 Set-StrictMode -Version Latest
@@ -46,6 +47,13 @@ try {
     # Keep this script ASCII-only: Windows PowerShell 5.1 reads UTF-8 without BOM as ANSI.
     # JSON Unicode escapes reconstruct the Persian request after JSON decoding.
     $Body = '{"message":"\u0633\u0644\u0627\u0645\u060c \u0644\u0637\u0641\u0627\u064b \u062f\u0631 \u062f\u0648 \u062c\u0645\u0644\u0647 \u0628\u0647 \u0641\u0627\u0631\u0633\u06cc \u067e\u0627\u0633\u062e \u0628\u062f\u0647."}'
+    if ($ConversationId) {
+        $ParsedId = [Guid]::Empty
+        if (-not [Guid]::TryParse($ConversationId, [ref]$ParsedId)) {
+            throw "ConversationId must be a UUID."
+        }
+        $Body = $Body.Substring(0, $Body.Length - 1) + ',"conversation_id":"' + $ParsedId.ToString() + '"}'
+    }
     $Req.Content = [System.Net.Http.StringContent]::new(
         $Body, [System.Text.Encoding]::UTF8, "application/json"
     )

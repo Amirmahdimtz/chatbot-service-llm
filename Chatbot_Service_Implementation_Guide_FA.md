@@ -443,6 +443,16 @@ Upload
 
 ## ۹. حافظه مکالمه و مدیریت Context
 
+### وضعیت پیاده‌سازی مرحله ۴ (2026-11-11)
+
+- Conversation و ChatMessage در PostgreSQL همراه با شناسه UUID متنی، مالک، Audience، ترتیب یکتای پیام‌ها و Timestamp نگهداری می‌شوند.
+- ایجاد دو پیام هر Turn (User completed و Assistant streaming) در یک Transaction با قفل ردیف Conversation انجام می‌شود؛ پایان موفق، خطا و Cancellation وضعیت مستقل دارند.
+- API تاریخچه و فهرست مکالمات تنها بر مبنای هویت معتبر سمت سرور، با Pagination و ترتیب قطعی Query می‌شوند.
+- Summary خودکار مکالمه و سیاست حذف/Retention نهایی هنوز تصمیم قطعی ندارند؛ هیچ DELETE مخربی در مرحله ۴ ارائه نشده است.
+- پاسخ‌های فعلی LLM تنها تعداد محدود پیام‌های completed قبلی را دریافت می‌کنند؛ پاسخ ناموفق یا نیمه‌کاره وارد Context پاسخ بعدی نمی‌شود.
+
+## ۹. حافظه مکالمه و مدیریت Context
+
 طرح منتخب: **PostgreSQL Persistent History + Short-term Context + Conversation Summary**.
 
 - هر Conversation شناسه مستقل، شناسه صاحب/Scope، زمان ایجاد و آخرین فعالیت دارد.
@@ -484,6 +494,17 @@ Upload
 - کنترل بار CPU با Semaphore اشتراکی در Provider (پیش‌فرض ۱ درخواست در هر Process)، پاسخ `LLM_BUSY` در Stream بدون صف نامحدود، محدودیت کاراکتر خروجی، حداکثر توکن و Timeout اعمال می‌شود.
 - تنها هویت Local معتبر، Token محرمانه `CHATBOT_DEV_API_TOKEN` در `ENV_TYPE=development` با `auth.dev_enabled=true` است؛ Principal آزمایشی همیشه `public` و Synthetic است. Headerهای `X-Audience`/`X-User-ID` رد می‌شوند. Production تا افزودن Identity Provider معتبر، برای Chat همواره `401` (fail closed) می‌دهد؛ این مسیر Local جایگزین SSO نیست.
 - `llama.cpp` از `POST /v1/chat/completions` با `stream=true` استفاده می‌کند؛ `model_name` اختیاری و برای single-model server خالی است. سازگاری Chat Template، کیفیت فارسی، TTFT و Cancel باید روی Build/Model واقعی Windows اندازه‌گیری شوند؛ بدون شواهد محلی تأییدشده نیستند.
+
+### قرارداد اجرایی مرحله ۴
+
+- `POST /api/v1/conversation/`، `GET /api/v1/conversation/`، `GET /api/v1/conversation/{conversation_id}` ایجاد و مشاهده‌ی دامنه مالک و تاریخچه Page‌بندی‌شده را فراهم می‌کنند.
+- `POST /api/v1/chat/stream` اکنون Conversation جدید می‌سازد یا شناسه موجود را با Ownership بررسی می‌کند؛ شناسه‌ها در `message_start` واقعی هستند.
+- `POST /api/v1/feedback/` روی پیام کامل دستیار، با `kind=positive|negative|incorrect`، یک رکورد به‌ازای هر کاربر/پیام ذخیره می‌کند؛ تکرار 409 است.
+- `POST /api/v1/knowledge/` صرفاً Metadata را با وضعیت `registered` و `version=1` ثبت می‌کند. **هیچ فایل، Chunk، Vector یا وضعیت Index موفق ساخته نمی‌شود.**
+- `GET /api/v1/knowledge/` و `GET /api/v1/knowledge/{document_id}` فقط اسناد متعلق به مالک و Audience معتبر او را باز می‌گردانند.
+- `DELETE` مکالمه تا روشن شدن سیاست Retention سازمان ایجاد نشده است؛ اطلاعات موجود حذف نمی‌شود.
+- مجوز توسعه صرفاً برای Principal مصنوعی `public` و Token محلی است؛ Production فاقد Provider احراز هویت سازمانی همواره fail closed باقی می‌ماند.
+- Revision: `20261111_01`. راهنمای آزمون و اجرای امن: `docs/stage-4-persistence.md`.
 
 ### ۱۰.۲. SSE
 
@@ -791,6 +812,10 @@ storage:
 | 2026-11-10 | Dev Environment | Windows 11، CPU-only، 16GB، Docker Compose | قطعی بر اساس سخت‌افزار گزارش‌شده |
 | 2026-11-10 | تست داده‌ها | Fixtureهای ساختگی و قرارداد Import برای داده واقعی سازمان | قطعی |
 | 2026-11-10 | Authentication/Approval | SSO و سیاست تصویب نهایی متعلق به سازمان؛ اتصال امن و تحلیل قابل تحویل | قطعی در حد مسئولیت |
+| 2026-11-11 | Stage 4 Persistence | UUID متنی، ترتیب اتمیک Turn، Streaming status و History با Ownership و Audience در PostgreSQL | پیاده‌سازی مرحله ۴ |
+| 2026-11-11 | Feedback | تنها پیام completed متعلق به مالک؛ یک بازخورد برای هر actor/message؛ تکرار HTTP 409 | پیاده‌سازی مرحله ۴ |
+| 2026-11-11 | Knowledge Metadata | ثبت Metadata بدون Upload/Indexing؛ وضعیت registered، نسخه ۱، دسترسی محدود به مالک و Audience | مرز مرحله ۴/۵ |
+| 2026-11-11 | Conversation Deletion | تا تعیین سیاست Retention، Endpoint حذف فعال نمی‌شود | تصمیم ایمن موقت |
 | 2026-11-10 | Stage 2 local infrastructure | Compose سه‌سرویسی، PostgreSQL 16.15، Qdrant 1.20.0، Storage جدا، Local llama.cpp و Health Check مستقل از Liveness | تصمیم اجرایی Development؛ اعتبارسنجی Windows باز |
 | 2026-11-10 | Stage 2 development credentials | آماده‌سازی idempotent و CRLF-safe فایل `.env`، حفظ Secret موجود و عدم نمایش Credential در خروجی | اصلاح راه‌اندازی Development |
 | 2026-11-10 | Stage 2 PyPI mirror | انتخاب اختیاری Mirror ران‌فلر برای Docker Build محلی از طریق Build ARG، پیش‌فرض PyPI رسمی در CI و حفظ TLS | تصمیم اجرایی Development؛ آزمون Windows باز |
@@ -825,6 +850,7 @@ LLM، Embedding و Reranking محلی، Runtime اصلی llama.cpp، Vector DB �
 | نسخه | تاریخ | تغییر |
 |---|---|---|
 | `1.0.0` | `2026-11-10` | تدوین سند جامع از تصمیم‌های توافق‌شده درباره هسته چت‌بات، پنج سناریو، Agent داخلی، یک Deployment، LLM محلی، Qdrant، RAG، SSE، Storage، تست و سخت‌افزار محلی. |
+| `1.1.0` | `2026-11-11` | ثبت قراردادهای واقعی Stage 4 برای Conversation History، وضعیت SSE، Feedback، Knowledge Metadata، Scope، Migration و Retention. |
 | `1.0.1` | `2026-11-10` | ثبت تصمیم‌های اجرایی Stage 2 برای Compose، Security، Persistent Storage، Runtime محلی و وضعیت آزمون Windows. |
 | `1.0.2` | `2026-11-10` | اصلاح مشکل سازگاری CRLF در آماده‌سازی Environment مرحله ۲، افزودن راه‌اندازی idempotent و اصلاح دستور اجرای llama.cpp در نشست مستقل PowerShell. |
 | `1.0.3` | `2026-11-10` | امکان انتخاب Runflare PyPI Mirror برای نصب وابستگی‌ها در Docker Build مرحله ۲ و ثبت ملاحظات امنیتی. |

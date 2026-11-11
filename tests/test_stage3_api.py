@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from uuid import uuid4
 
@@ -10,7 +11,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.application.web import WebService
-from src.infrastructure.di.inject import install_providers
+from src.infrastructure.alembic.model_discovery import load_models
+from src.infrastructure.context.sql_db.psql_dbcontext import Base, PsqlDbContext
+from src.infrastructure.di.inject import install_providers, resolve
 from src.infrastructure.di.reflection import discover_providers
 from src.infrastructure.providers.llm import llama_cpp_provider
 from src.infrastructure.utils.config_reader import ConfigReader
@@ -20,13 +23,20 @@ TOKEN = "stage3-synthetic-token-" + "X" * 40
 
 
 @pytest.fixture
-def dev_app(monkeypatch):
+def dev_app(monkeypatch, tmp_path):
     monkeypatch.setenv("ENV_TYPE", "development")
     monkeypatch.setenv("CHATBOT_DEV_API_TOKEN", TOKEN)
-    monkeypatch.delenv("CHATBOT_DATABASE_URL", raising=False)
+    monkeypatch.setenv("CHATBOT_DATABASE_URL", f"sqlite+aiosqlite:///{(tmp_path / 'stage3.sqlite').as_posix()}")
     monkeypatch.delenv("CHATBOT_LLM_BASE_URL", raising=False)
     install_providers(discover_providers())
-    return WebService(ConfigReader()).create_app()
+    load_models()
+    app = WebService(ConfigReader()).create_app()
+    context = resolve(PsqlDbContext)
+    async def setup_async():
+        async with context.engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+    asyncio.run(setup_async())
+    return app
 
 
 def mock_stream(monkeypatch, text=None, http_status=200):
@@ -65,7 +75,7 @@ def test_chat_auto_discovery_openapi_and_persian_utf8(dev_app, monkeypatch):
     assert [e[0] for e in events] == ["message_start", "delta", "message_end"]
     assert events[1][1]["text"] == "سلام"
     assert events[-1][1]["status"] == "completed"
-    assert events[0][1]["conversation_id"] is None
+    assert events[0][1]["conversation_id"] is not None
     assert events[0][1]["request_id"] == response.headers["x-request-id"]
 
 
@@ -80,14 +90,19 @@ def test_missing_identity_and_untrusted_claims(dev_app):
         assert forged.json()["error"]["code"] == "UNTRUSTED_CLAIMS"
 
 
-def test_conversation_is_not_accepted_without_persistence(dev_app):
+def test_conversation_continuation_has_real_persistence(dev_app, monkeypatch):
+    mock_stream(monkeypatch)
     with TestClient(dev_app) as client:
+        initial = client.post("/api/v1/chat/stream", json={"message": "hello"},
+                              headers={"Authorization": f"Bearer {TOKEN}"})
+        conversation_id = events_from(initial)[0][1]["conversation_id"]
         response = client.post("/api/v1/chat/stream", json={"message": "hello",
-                                "conversation_id": str(uuid4())},
+                               "conversation_id": conversation_id},
                                headers={"Authorization": f"Bearer {TOKEN}"})
-        assert response.status_code == 409
-        assert response.json()["error"]["code"] == "CONVERSATION_UNAVAILABLE"
-        assert "/api/v1/conversation/" not in dev_app.openapi()["paths"]
+        assert response.status_code == 200
+        assert events_from(response)[0][1]["conversation_id"] == conversation_id
+        assert len(client.get(f"/api/v1/conversation/{conversation_id}",
+                              headers={"Authorization": f"Bearer {TOKEN}"}).json()["messages"]) == 4
 
 
 def test_bad_input_produces_sanitized_json_error(dev_app):
@@ -134,10 +149,10 @@ def test_reasoning_only_stream_returns_sanitized_empty_response(dev_app, monkeyp
     assert "private reasoning" not in response.text
 
 
-def test_production_denies_dev_token_even_if_present(monkeypatch):
+def test_production_denies_dev_token_even_if_present(monkeypatch, tmp_path):
     monkeypatch.setenv("ENV_TYPE", "production")
     monkeypatch.setenv("CHATBOT_DEV_API_TOKEN", TOKEN)
-    monkeypatch.delenv("CHATBOT_DATABASE_URL", raising=False)
+    monkeypatch.setenv("CHATBOT_DATABASE_URL", f"sqlite+aiosqlite:///{(tmp_path / 'prod.sqlite').as_posix()}")
     install_providers(discover_providers())
     app = WebService(ConfigReader()).create_app()
     with TestClient(app) as client:

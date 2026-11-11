@@ -16,4 +16,5 @@ def test_alembic_script_and_metadata():
     assert Path(script.dir, 'versions').is_dir()
     load_models()
     assert Base.metadata is not None
-    assert list(script.walk_revisions()) == []
+    assert [item.revision for item in script.walk_revisions()] == ["20261111_01"]
+    assert {"conversations", "chat_messages", "feedback", "knowledge_documents"} <= set(Base.metadata.tables)

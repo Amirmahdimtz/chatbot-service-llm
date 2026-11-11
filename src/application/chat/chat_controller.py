@@ -1,16 +1,17 @@
-"""HTTP authentication, request validation and SSE framing; workflow stays in Core."""
-
+"""Authenticated Chat SSE; persistence is finalized in Core, not HTTP."""
 from __future__ import annotations
 
 import json
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from src.application.auth import api_error, authenticate_request
 from src.application.chat.dtos.chat_dto import ChatRequestDto
 from src.core.services.chat.chat_identity_service import ChatIdentityService
 from src.core.services.chat.chat_service import ChatService
+from src.core.services.errors import ResourceNotFound
 from src.infrastructure.di.inject import inject
 
 
@@ -27,51 +28,36 @@ class ChatController:
     def api(self) -> APIRouter:
         router = APIRouter(tags=["Chat"])
 
-        @router.post(
-            "/stream",
-            summary="Stream one stateless answer from the local model",
-            response_class=StreamingResponse,
-            responses={
-                200: {
-                    "description": "SSE: message_start, delta*, message_end; on failure: error, message_end",
-                    "content": {"text/event-stream": {"schema": {"type": "string"}}},
-                },
-                401: {"description": "Untrusted identity"},
-                403: {"description": "Untrusted audience claim"},
-                409: {"description": "Conversation persistence not available until stage 4"},
-                422: {"description": "Invalid request"},
-            },
-        )
+        @router.post("/stream", summary="Stream a persisted local-model response",
+                     response_class=StreamingResponse,
+                     responses={
+                         200: {"description": "SSE: message_start, delta*, message_end; errors via error event",
+                               "content": {"text/event-stream": {"schema": {"type": "string"}}}},
+                         401: {"description": "Untrusted identity"},
+                         403: {"description": "Untrusted audience claim"},
+                         404: {"description": "Conversation not found or not owned"},
+                         503: {"description": "Persistence unavailable"},
+                         422: {"description": "Invalid request"},
+                     })
         async def stream_chat_async(payload: ChatRequestDto, request: Request):
             request_id = uuid4()
-            headers = {"X-Request-ID": str(request_id)}
-            if self._identity.authenticate(request.headers.get("authorization")) is None:
-                return JSONResponse(
-                    status_code=401,
-                    content={"error": {"code": "UNAUTHENTICATED", "message": "Valid identity required.",
-                                       "request_id": str(request_id)}},
-                    headers=headers,
+            principal = authenticate_request(request, self._identity, request_id)
+            if isinstance(principal, JSONResponse):
+                return principal
+            try:
+                conversation_id, message_id = await self._chat_service.start_async(
+                    payload.message, principal,
+                    str(payload.conversation_id) if payload.conversation_id else None
                 )
-            if "x-audience" in request.headers or "x-user-id" in request.headers:
-                return JSONResponse(
-                    status_code=403,
-                    content={"error": {"code": "UNTRUSTED_CLAIMS", "message": "Client identity claims are not accepted.",
-                                       "request_id": str(request_id)}},
-                    headers=headers,
-                )
-            if payload.conversation_id is not None:
-                return JSONResponse(
-                    status_code=409,
-                    content={"error": {"code": "CONVERSATION_UNAVAILABLE",
-                                       "message": "Conversation continuation requires persistent ownership checks.",
-                                       "request_id": str(request_id)}},
-                    headers=headers,
-                )
-
-            message_id = uuid4()
+            except ResourceNotFound:
+                return api_error("NOT_FOUND", "Conversation not found.", 404, request_id)
+            except Exception:
+                return api_error("PERSISTENCE_UNAVAILABLE", "Conversation storage unavailable.", 503, request_id)
 
             async def stream_events_async():
-                iterator = self._chat_service.stream_async(payload.message, request_id, message_id)
+                iterator = self._chat_service.stream_async(
+                    payload.message, request_id, UUID(message_id), UUID(conversation_id), principal
+                )
                 try:
                     async for event in iterator:
                         if await request.is_disconnected():
@@ -81,9 +67,8 @@ class ChatController:
                     await iterator.aclose()
 
             return StreamingResponse(
-                stream_events_async(),
-                media_type="text/event-stream",
-                headers={**headers, "Cache-Control": "no-cache, no-transform",
+                stream_events_async(), media_type="text/event-stream",
+                headers={"X-Request-ID": str(request_id), "Cache-Control": "no-cache, no-transform",
                          "X-Accel-Buffering": "no"},
             )
 

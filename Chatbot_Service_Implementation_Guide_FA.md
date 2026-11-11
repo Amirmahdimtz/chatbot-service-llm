@@ -2,7 +2,7 @@
 
 > **نام فایل:** `Chatbot_Service_Implementation_Guide_FA.md`  
 > **پروژه:** `chatbot-service-llm`  
-> **نسخه سند:** `1.0.8`  
+> **نسخه سند:** `1.2.0`  
 > **تاریخ تدوین:** `2026-11-10`  
 > **وضعیت:** قرارداد محصول و تصمیم‌های معماری مورد توافق؛ برخی تنظیمات مدل و استقرار محلی تا زمان Benchmark قابل اصلاح هستند.  
 > **سند همراه و الزامی:** `Service_Architecture_Guide_FA.md`
@@ -441,6 +441,19 @@ Upload
 
 ---
 
+### ۸.۵. قرارداد اجرایی مرحله ۵ (۲۰۲۶-۱۱-۱۱)
+
+- مسیر مستقل مرحله ۵: ثبت Metadata، Upload محدود و مالک‌محور، ذخیره فایل با کلید داخلی، SHA-256، استخراج، نرمال‌سازی فارسی، Chunking ساختارمحور، Embedding محلی، Upsert در Qdrant و ثبت نسخه فعال در PostgreSQL. اتصال به SSE و Scenario Router در مرحله ۶ باقی می‌ماند.
+- ورودی‌ها: PDF با استخراج صفحه و OCR محلی Tesseract، TXT/JSON/CSV با UTF-8 معتبر، DOC قدیمی با تبدیل LibreOffice در محیط محدود، DOCX و XLSX با Parser محلی. حجم اولیه ۲۵ مگابایت و محدودیت‌های صفحات، ردیف‌ها و بازکردن ZIP قابل تنظیم هستند.
+- Embedding: Endpoint محلی سازگار با `/v1/embeddings`، مدل ابتدایی `Qwen3-Embedding-0.6B`، اعتبارسنجی Dimension و نسخه واقعی هنگام Indexing؛ بدون Embedding تصادفی در محیط عملیاتی.
+- Vector Index: دو Collection منطقی `knowledge_public` و `knowledge_internal` با Dense Cosine نام‌دار `dense` و Sparse Lexical نام‌دار `lexical`. Sparse اولیه از هش پایدار اصطلاحات نرمال‌شده فارسی و وزن Term Frequency استفاده می‌کند؛ این روش BM25 نیست و نیاز به Benchmark فارسی دارد. ادغام با RRF و Reranking محلی مدل پیشنهادی `BGE-reranker-v2-m3` انجام می‌شود.
+- امنیت: متادیتای مالکیت و Tenant از Identity مورداعتماد Backend استخراج می‌شود. Public هیچ‌گاه Collection داخلی را Query نمی‌کند. انتشار بین‌کاربری دانش عمومی نیازمند Permission مستقل `knowledge:publish` و تأیید وضعیت سند است. نتیجه Retrieval مجدداً با سند، نسخه فعال و Chunk ID در PostgreSQL تطبیق داده می‌شود.
+- چرخه عمر: Claim اتمیک پردازش، فایل Pending برای Retry، خطای کنترل‌شده، Dedup در Scope مالک/Audience، Version Replacement و غیرفعال‌سازی غیرمخرب نسخه قبلی. حذف دائمی و پاک‌سازی Collection بدون اجازه انجام نمی‌شود.
+- مدل‌های محلی، OCR، حافظه و کیفیت Retrieval تا اجرای تست واقعی و Benchmark روی Windows تأییدشده محسوب نمی‌شوند؛ Stage 5 فقط با شواهد تمام معیارهای پذیرش `completed` می‌شود.
+- جزئیات API، Migration، تست‌ها، راهنمای Windows و بازیابی در `docs/stage-5-ingestion-retrieval.md` ثبت می‌شوند.
+
+---
+
 ## ۹. حافظه مکالمه و مدیریت Context
 
 ### وضعیت پیاده‌سازی مرحله ۴ (2026-11-11)
@@ -826,6 +839,10 @@ storage:
 | 2026-11-11 | Stage 3 Qwen3 non-thinking output | Start local Qwen3 with `--reasoning off` (if supported) and request per-call `chat_template_kwargs.enable_thinking=false` by validated YAML config; keep reasoning out of SSE; do not raise CPU token budget to mask empty output | رفع ریشه‌ای پیشنهادی؛ تست موفق واقعی Windows باز |
 | 2026-11-11 | Stage 3 Windows PowerShell Unicode source | Ensure ANSI-codepage-safe `.ps1` source by using ASCII-only JSON Unicode escapes for Persian prompt; add exact prompt regression and CI check; do not alter production SSE decoding without evidence | رفع مشکل درخواست فارسی در PowerShell 5.1؛ آزمون دوباره خروجی مدل روی Windows باز |
 
+| 2026-11-11 | Stage 5 ingestion | Parser محلی هفت فرمت، OCR/LibreOffice، Storage پایدار با UUID، SHA-256، نسخه و Retry؛ عدم انتشار تا Index موفق | پیاده‌سازی اولیه؛ تأیید Windows باز |
+| 2026-11-11 | Stage 5 retrieval | Dense + Lexical sparse با Qdrant named vectors، Fusion از نوع RRF، Reranking محلی، بررسی Visibility/Version مجدد در PostgreSQL | پیاده‌سازی اولیه؛ Benchmark فارسی باز |
+| 2026-11-11 | Stage 5 knowledge access | Metadata مالک‌محور مرحله ۴ حفظ شد؛ انتشار دانش Public نیازمند Permission مستقل و Internal بر اساس Tenant/Permission تفکیک می‌شود | قرارداد امنیتی Stage 5 |
+
 ---
 
 ## ۲۰. دستور آماده برای استفاده در گفتگوهای آینده
@@ -851,6 +868,7 @@ LLM، Embedding و Reranking محلی، Runtime اصلی llama.cpp، Vector DB �
 | نسخه | تاریخ | تغییر |
 |---|---|---|
 | `1.0.0` | `2026-11-10` | تدوین سند جامع از تصمیم‌های توافق‌شده درباره هسته چت‌بات، پنج سناریو، Agent داخلی، یک Deployment، LLM محلی، Qdrant، RAG، SSE، Storage، تست و سخت‌افزار محلی. |
+| `1.2.0` | `2026-11-11` | ثبت قرارداد اجرایی مرحله ۵ درباره Parser/OCR، Storage، Embedding، Qdrant Hybrid+RRF، Reranking، Retrieval Access، Version/Retry و محدودیت Benchmark محلی. |
 | `1.1.1` | `2026-11-11` | رفع مشکل ماندن پیام SSE در وضعیت `streaming` هنگام client disconnect با shield در cleanup و تست لغو ASGI؛ ثبت تفاوت نمایش JSON فارسی در PowerShell 5.1. |
 | `1.1.0` | `2026-11-11` | ثبت قراردادهای واقعی Stage 4 برای Conversation History، وضعیت SSE، Feedback، Knowledge Metadata، Scope، Migration و Retention. |
 | `1.0.1` | `2026-11-10` | ثبت تصمیم‌های اجرایی Stage 2 برای Compose، Security، Persistent Storage، Runtime محلی و وضعیت آزمون Windows. |

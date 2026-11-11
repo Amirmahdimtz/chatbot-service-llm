@@ -1,4 +1,4 @@
-name: Stage 2-4 checks
+name: Stage 2-5 checks
 on:
   push:
     branches: [main]
@@ -40,7 +40,7 @@ jobs:
           python -c 'from pathlib import Path; p=Path("src/host/entrypoint.sh"); p.write_bytes(p.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")); assert b"\r\n" in p.read_bytes()'
       - name: Build and start infrastructure
         run: docker compose up -d --build --wait --wait-timeout 240
-      - name: Apply committed Stage 4 Alembic migration
+      - name: Apply committed Stage 4-5 Alembic migrations
         run: |
           docker compose exec -T app python -m alembic -c src/infrastructure/alembic/alembic.ini upgrade head
           docker compose exec -T app python -m alembic -c src/infrastructure/alembic/alembic.ini current
@@ -48,6 +48,11 @@ jobs:
         run: |
           python -m pip install -r requirements-dev.txt
           CHATBOT_TEST_DATABASE_URL=postgresql+asyncpg://chatbot:ci-only-synthetic-password@127.0.0.1:5432/chatbot CHATBOT_TEST_DATABASE_ISOLATED=1 python -m pytest -q tests/test_stage4_postgres.py
+      - name: Run real local Word converter and scanned PDF OCR smoke test
+        run: docker compose exec -T app python -m src.infrastructure.scripts.check_stage5_parsers
+      - name: Verify genuine Qdrant hybrid dense and lexical vector queries
+        run: |
+          CHATBOT_TEST_QDRANT_URL=http://127.0.0.1:6333 CHATBOT_TEST_QDRANT_ISOLATED=1 python -m pytest -q tests/test_stage5_qdrant.py
       - name: Verify async database, Qdrant and persistent storage
         run: docker compose exec -T app python -m src.infrastructure.scripts.check_infrastructure
       - name: Restart without deleting volumes and recheck

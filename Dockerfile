@@ -7,6 +7,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 # Python dependencies: allow a trusted local mirror for Docker builds.
 ARG PIP_INDEX_URL=https://pypi.org/simple/
+# Local legacy-Word conversion and Persian OCR, no cloud document service.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libreoffice-writer tesseract-ocr tesseract-ocr-fas tesseract-ocr-eng \
+    && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 RUN python -m pip install --no-cache-dir --timeout 60 --index-url "$PIP_INDEX_URL" -r requirements.txt \
     && groupadd --gid 10001 chatbot \

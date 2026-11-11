@@ -7,11 +7,37 @@ database:
   url: ""
 vector:
   url: ""
-  timeout_seconds: 5
+  timeout_seconds: 30
   public_collection: knowledge_public
   internal_collection: knowledge_internal
 storage:
   path: ""
+embedding:
+  base_url: ""
+  model_name: ""
+  model_version: Qwen3-Embedding-0.6B
+  dimension: 1024
+  batch_size: 4
+  timeout_seconds: 180
+reranking:
+  base_url: ""
+  model_version: BGE-reranker-v2-m3
+  timeout_seconds: 180
+  max_candidates: 20
+ingestion:
+  max_upload_bytes: 26214400
+  max_pages: 300
+  max_rows: 100000
+  ocr_enabled: true
+  ocr_language: fas+eng
+  chunk_length: 512
+  chunk_overlap: 64
+  max_chunks: 1024
+  stale_processing_minutes: 180
+retrieval:
+  first_stage: 20
+  final: 5
+  rrf_k: 60
 llm:
   base_url: ""
   timeout_seconds: 120

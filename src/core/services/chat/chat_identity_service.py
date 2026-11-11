@@ -14,6 +14,7 @@ class ChatIdentity:
     subject: str
     audience: str
     permissions: frozenset[str] = field(default_factory=frozenset)
+    tenant_id: str | None = None
 
 
 @inject
@@ -36,6 +37,5 @@ class ChatIdentityService:
             return None
         if not hmac.compare_digest(presented, expected):
             return None
-        # Never grant internal access through the development credential.
         return ChatIdentity(subject="synthetic-development-public", audience="public",
                             permissions=frozenset({"knowledge:write"}))

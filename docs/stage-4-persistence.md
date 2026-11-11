@@ -89,8 +89,14 @@ docker compose exec -T app python -m src.infrastructure.scripts.check_infrastruc
 
 Do not run `alembic downgrade` against your local persistent Docker database.
 Never delete volumes, overwrite `.env` or hard-reset the local checkout.
-Check port conflicts (8000/5432/6333) before launching; adjust existing
+Check published host port conflicts (configured CHATBOT_APP_PORT,
+POSTGRES_HOST_PORT and QDRANT_HOST_PORT) before launching; adjust existing
 private Compose settings instead of stopping unrelated services.
+A container mapping such as `127.0.0.1:18000->8000/tcp` requires
+`http://127.0.0.1:18000` from Windows; `8000` is the internal container
+port. An HTTP 404 from port 8000 may be an unrelated local HTTP service,
+not a problem in the Chat controller. `docker compose port app 8000`
+reports the effective published port without printing credentials.
 
 ## Automated tests
 
@@ -113,7 +119,21 @@ PostgreSQL instance. Do not point either at a database holding valuable data.
 ## API and real streaming validation
 
 ```powershell
-$Api = "http://127.0.0.1:8000"
+# Resolve the published HOST port rather than the container's port 8000.
+# This also works when CHATBOT_APP_PORT is changed in the private .env file.
+$PublishedPort = docker compose port app 8000
+if ($LASTEXITCODE -ne 0 -or -not $PublishedPort) {
+    throw "Could not determine the published app port; check docker compose ps."
+}
+$PortText = (($PublishedPort | Select-Object -First 1) -split ':')[-1]
+$HostPort = 0
+if (-not [int]::TryParse($PortText, [ref]$HostPort) -or
+    $HostPort -lt 1 -or $HostPort -gt 65535) {
+    throw "Invalid host port returned by Docker Compose."
+}
+$Api = "http://127.0.0.1:$HostPort"
+Write-Host ("Testing app at {0}" -f $Api)
+Invoke-RestMethod -Uri "$Api/api/v1/health"
 $TokenLine = Get-Content -LiteralPath ".env" |
     Where-Object { $_ -match '^CHATBOT_DEV_API_TOKEN=' } | Select-Object -First 1
 if (-not $TokenLine) { throw "Missing synthetic token" }
@@ -129,7 +149,7 @@ $Metadata = Invoke-RestMethod -Method Post -Uri "$Api/api/v1/knowledge/" `
 $MetadataState = Invoke-RestMethod -Uri "$Api/api/v1/knowledge/$($Metadata.id)" -Headers $Headers
 Write-Host ("Created conversation ID: {0}" -f $ConversationId)
 Write-Host ("Knowledge status: {0}" -f $MetadataState.status)
-# Default script URL is 127.0.0.1:18000; pass ApiUrl when app port is 8000.
+# Always use the effective Compose host port; the container listens on 8000.
 .\scripts\test-chat-stream.ps1 -ApiUrl "$Api/api/v1/chat/stream" -ConversationId $ConversationId
 $History = Invoke-RestMethod -Uri "$Api/api/v1/conversation/$ConversationId" -Headers $Headers
 $Reply = @($History.messages | Where-Object { $_.role -eq "assistant" -and $_.status -eq "completed" } | Select-Object -Last 1)

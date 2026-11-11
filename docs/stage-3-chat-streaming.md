@@ -264,6 +264,42 @@ only meaningful after a delta has actually arrived. If the server still
 returns no text, provide the sanitized SSE event codes and timing summary,
 not raw prompts, thought content or credentials.
 
+## Windows PowerShell 5.1: avoid Persian prompt mojibake
+
+A confirmed local run reached `message_end(status=completed)`, but the
+generated SSE `delta.text` chunks contained characters such as `Ø` and
+`Ù`, despite `LLM: passed`. The repository's previous smoke test contained
+a literal Persian prompt in a UTF-8 **without BOM** `.ps1` file. Windows
+PowerShell 5.1 parses BOM-less script source as the system ANSI code page.
+This can corrupt the **request sent to the model**, even though
+`StringContent` subsequently encodes that corrupted .NET string in UTF-8.
+See [Microsoft's PowerShell encoding guidance](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_character_encoding?view=powershell-5.1).
+
+The script now stores its Persian test message as **ASCII-only JSON
+`\\uXXXX` escapes**, preserving the original Unicode text during JSON
+decoding on the FastAPI side. Its HTTP response reader already uses UTF-8,
+and the service's SSE frame encoder already emits UTF-8. We did not add a
+blind mojibake-repair transform to production output. Automated tests
+check that the source is ASCII and the JSON body decodes to the exact
+intended Persian message.
+
+This specific correction is in the local PowerShell client script only;
+pull the new commit and rerun the smoke test. **No Docker rebuild or model
+restart is required** if both are already healthy. Actual end-to-end Persian
+generation must still be verified after pulling.
+
+If `& $LlamaExecutable` fails with `BadExpression`, the variable is unset
+in the **current PowerShell session**, not an indication of model failure.
+Initialize it there before invoking the native executable:
+
+```powershell
+$LlamaExecutable = (Get-Command llama-server.exe -ErrorAction Stop).Source
+```
+
+Do not launch a second copy of llama-server while port 8080 is already held
+by the healthy running process. Review native `--help` flags only when you
+need to restart the model.
+
 ## Real, incrementally read Persian SSE on Windows
 
 Windows PowerShell 5.1 does **not always load `System.Net.Http` by default**.

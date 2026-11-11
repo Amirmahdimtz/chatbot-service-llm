@@ -5,6 +5,9 @@ Windows-hosted local `llama.cpp` model, with bounded concurrency and safe stream
 Conversation DTOs are defined but **no conversation/history routes or persistence exist yet**;
 they are stage 4 work. Production Chat fails closed until a trusted identity integration exists.
 
+The local SSE PowerShell smoke test stores its synthetic Persian prompt as
+ASCII JSON Unicode escapes for compatibility with Windows PowerShell 5.1.
+
 The initial Qwen3-1.7B model uses non-thinking chat settings; recent native
 llama.cpp builds should be launched with `--reasoning off` to avoid consuming
 the small 256-token budget before any final answer. Windows live confirmation

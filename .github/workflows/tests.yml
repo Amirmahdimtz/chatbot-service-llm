@@ -108,5 +108,11 @@ jobs:
           Add-Type -AssemblyName System.Net.Http -ErrorAction Stop
           $Http = [System.Net.Http.HttpClient]::new()
           $Http.Dispose()
+          # BOM-less UTF-8 containing Persian is parsed as ANSI by Windows PowerShell 5.1.
+          # Keep the smoke script ASCII-only; non-ASCII requests use JSON Unicode escapes.
+          $Bytes = [IO.File]::ReadAllBytes($ScriptPath)
+          if (@($Bytes | Where-Object { $_ -gt 127 }).Count -ne 0) {
+              throw "SSE smoke script must be ASCII-only for Windows PowerShell 5.1."
+          }
           Write-Host "PowerShell 5.1 SSE script syntax and HttpClient initialization passed."
 

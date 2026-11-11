@@ -114,6 +114,9 @@ async def test_ingestion_version_replacement_dedup_and_safety(system):
                if point["payload"]["version"] == 1)
     latest = await index.retrieve_async(owner, "مقاله")
     assert latest and all(x["version"] == 2 for x in latest)
+    reindexed = await index.ingest_async(owner, doc.id, None, None, reindex=True)
+    assert reindexed.version == 3 and reindexed.checksum == updated.checksum
+    assert all(x["version"] == 3 for x in await index.retrieve_async(owner, "مقاله"))
     other = await metadata.register_async(owner, "Duplicate", "txt", None, "fa", None, "public")
     with pytest.raises(ResourceConflict):
         await index.ingest_async(owner, other.id, "duplicate.txt", "مقاله جدید".encode())

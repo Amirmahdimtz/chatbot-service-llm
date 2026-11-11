@@ -88,12 +88,16 @@ class QdrantProvider:
             assert "lexical" in params["sparse_vectors"]
         except (KeyError, TypeError, AttributeError, AssertionError) as exc:
             raise VectorIndexError("VECTOR_SCHEMA_MISMATCH") from exc
-        # Reject even same-dimensional embeddings from a different model version.
+        # Server-side scan for ANY different/missing version, not only the first point.
+        # This avoids mixing incompatible embeddings when a collection is partially indexed.
         points = await self._request_async("POST", f"/collections/{name}/points/scroll", {
-            "limit": 1, "with_payload": ["embedding_model_version"], "with_vector": False,
+            "limit": 1,
+            "filter": {"must_not": [{"key": "embedding_model_version",
+                                    "match": {"value": model_version}}]},
+            "with_payload": ["embedding_model_version"], "with_vector": False,
         })
-        sample = points.get("result", {}).get("points", [])
-        if sample and sample[0].get("payload", {}).get("embedding_model_version") != model_version:
+        incompatible = points.get("result", {}).get("points", [])
+        if incompatible:
             raise VectorIndexError("VECTOR_MODEL_MISMATCH")
 
     async def upsert_async(self, audience: str, points: list[dict]) -> None:

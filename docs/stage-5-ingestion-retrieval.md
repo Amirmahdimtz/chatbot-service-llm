@@ -35,6 +35,13 @@ document.
 9. Commit PostgreSQL status `approved`, active version, checksum, storage key,
    embedding model version and chunk IDs **only after** confirmed Qdrant writes.
 
+`POST /api/v1/knowledge/{id}/reindex` reuses the checksum-verified stored original
+to create a fresh version with the currently configured model, without
+requiring a new upload. It is rejected if there is no successful indexed
+original. A model-version mismatch in an existing collection still requires
+a separately approved safe index cutover; reindex never overwrites an
+incompatible vector space.
+
 Retry uses the persisted pending file and checksum. A crashed process may leave
 an unfinished claim; configured stale processing claims (180 minutes) may be
 recovered, but users should confirm that the previous worker is no longer
@@ -117,6 +124,7 @@ acquire privileged tool/command execution rights.
 | POST | `/api/v1/knowledge/{id}/upload` | Multipart `file`, process first version, 200 |
 | POST | `/api/v1/knowledge/{id}/replace` | Multipart `file`, new version only on success |
 | POST | `/api/v1/knowledge/{id}/retry` | Recover pending original without reupload |
+| POST | `/api/v1/knowledge/{id}/reindex` | Refresh version from stored original |
 | POST | `/api/v1/knowledge/{id}/publish` | Explicit permission required |
 | POST | `/api/v1/knowledge/search` | JSON `{"query":"..."}`; top hits with citation metadata |
 

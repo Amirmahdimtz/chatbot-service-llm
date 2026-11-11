@@ -448,7 +448,7 @@ Upload
 - Embedding: Endpoint محلی سازگار با `/v1/embeddings`، مدل ابتدایی `Qwen3-Embedding-0.6B`، اعتبارسنجی Dimension و نسخه واقعی هنگام Indexing؛ بدون Embedding تصادفی در محیط عملیاتی.
 - Vector Index: دو Collection منطقی `knowledge_public` و `knowledge_internal` با Dense Cosine نام‌دار `dense` و Sparse Lexical نام‌دار `lexical`. Sparse اولیه از هش پایدار اصطلاحات نرمال‌شده فارسی و وزن Term Frequency استفاده می‌کند؛ این روش BM25 نیست و نیاز به Benchmark فارسی دارد. ادغام با RRF و Reranking محلی مدل پیشنهادی `BGE-reranker-v2-m3` انجام می‌شود.
 - امنیت: متادیتای مالکیت و Tenant از Identity مورداعتماد Backend استخراج می‌شود. Public هیچ‌گاه Collection داخلی را Query نمی‌کند. انتشار بین‌کاربری دانش عمومی نیازمند Permission مستقل `knowledge:publish` و تأیید وضعیت سند است. نتیجه Retrieval مجدداً با سند، نسخه فعال و Chunk ID در PostgreSQL تطبیق داده می‌شود.
-- چرخه عمر: Claim اتمیک پردازش، فایل Pending برای Retry، خطای کنترل‌شده، Dedup در Scope مالک/Audience، Version Replacement و غیرفعال‌سازی غیرمخرب نسخه قبلی. حذف دائمی و پاک‌سازی Collection بدون اجازه انجام نمی‌شود.
+- چرخه عمر: Claim اتمیک پردازش، فایل Pending برای Retry، خطای کنترل‌شده، Dedup در Scope مالک/Audience، Version Replacement، Reindex از نسخه ذخیره‌شده و غیرفعال‌سازی غیرمخرب نسخه قبلی. حذف دائمی و پاک‌سازی Collection بدون اجازه انجام نمی‌شود.
 - مدل‌های محلی، OCR، حافظه و کیفیت Retrieval تا اجرای تست واقعی و Benchmark روی Windows تأییدشده محسوب نمی‌شوند؛ Stage 5 فقط با شواهد تمام معیارهای پذیرش `completed` می‌شود.
 - جزئیات API، Migration، تست‌ها، راهنمای Windows و بازیابی در `docs/stage-5-ingestion-retrieval.md` ثبت می‌شوند.
 

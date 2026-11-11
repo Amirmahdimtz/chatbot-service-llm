@@ -83,6 +83,7 @@ def test_api_upload_search_replace_retry_and_auth(client, monkeypatch):
     routes = http.app.openapi()["paths"]
     for path in ("/api/v1/knowledge/{document_id}/upload",
                  "/api/v1/knowledge/{document_id}/retry",
+                 "/api/v1/knowledge/{document_id}/reindex",
                  "/api/v1/knowledge/{document_id}/replace",
                  "/api/v1/knowledge/{document_id}/publish", "/api/v1/knowledge/search"):
         assert path in routes
@@ -107,6 +108,8 @@ def test_api_upload_search_replace_retry_and_auth(client, monkeypatch):
     })
     assert replace.status_code == 200, replace.text
     assert replace.json()["version"] == 2
+    reindexed = http.post(f"/api/v1/knowledge/{id_}/reindex", headers=HEADERS)
+    assert reindexed.status_code == 200 and reindexed.json()["version"] == 3
     assert http.post(f"/api/v1/knowledge/{id_}/retry", headers=HEADERS).status_code == 409
     assert http.post(f"/api/v1/knowledge/{id_}/publish", headers=HEADERS).status_code == 403
     assert http.post("/api/v1/knowledge/search", headers={**HEADERS, "X-Audience": "internal"},

@@ -73,12 +73,24 @@ class KnowledgeIndexService:
 
     async def ingest_async(
         self, identity: ChatIdentity, document_id: str, filename: str | None,
-        content: bytes | None, replace: bool = False, retry: bool = False,
+        content: bytes | None, replace: bool = False, retry: bool = False, reindex: bool = False,
     ):
         if "knowledge:write" not in identity.permissions:
             raise PermissionDenied("Knowledge write permission required")
         document = await self._owned_async(identity, document_id)
-        if retry:
+        if retry and reindex:
+            raise ResourceConflict("Retry and reindex cannot be combined")
+        if reindex:
+            if document.status != "approved" or not document.storage_key or not document.checksum:
+                raise ResourceConflict("No indexed original available for reindex")
+            content = await self._storage.read_async(document.storage_key,
+                                                     self._processor.max_upload_bytes)
+            checksum = sha256(content).hexdigest()
+            if checksum != document.checksum:
+                raise ResourceConflict("Indexed file checksum mismatch")
+            storage_key = document.storage_key
+            replace = True
+        elif retry:
             if not document.pending_storage_key or not document.pending_checksum:
                 raise ResourceConflict("No pending file available")
             content = await self._storage.read_async(document.pending_storage_key,
@@ -100,7 +112,7 @@ class KnowledgeIndexService:
             raise ResourceConflict("Replacement requires explicit request")
         if document.status != "approved" and replace:
             raise ResourceConflict("Document has no current indexed version")
-        if document.status == "approved" and document.checksum == checksum:
+        if document.status == "approved" and document.checksum == checksum and not (reindex or retry):
             raise ResourceConflict("Content already indexed")
         if await self._documents.find_duplicate_async(identity.subject, identity.audience, checksum, document.id):
             raise ResourceConflict("Duplicate document")
@@ -113,7 +125,7 @@ class KnowledgeIndexService:
         try:
             if storage_key is None:
                 storage_key = await self._storage.save_async(document.id, document.source_type, content)
-                await self._documents.mark_pending_async(document.id, storage_key, checksum)
+            await self._documents.mark_pending_async(document.id, storage_key, checksum)
             sections = await self._processor.extract_async(content, document.source_type)
             chunks = chunk_sections(sections, size=self._chunk_size, overlap=self._overlap)
             if not chunks or len(chunks) > self._max_chunks:

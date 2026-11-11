@@ -153,6 +153,20 @@ class KnowledgeController:
             except Exception as exc:
                 return error_response(exc, request_id)
 
+        @router.post("/{document_id}/reindex", response_model=KnowledgeResponseDto)
+        async def reindex_document_async(document_id: UUID, request: Request):
+            request_id = uuid4()
+            principal = authenticate_request(request, self._identity, request_id)
+            if isinstance(principal, JSONResponse):
+                return principal
+            try:
+                doc = await self._index.ingest_async(
+                    principal, str(document_id), None, None, reindex=True
+                )
+                return KnowledgeResponseDto.model_validate(doc)
+            except Exception as exc:
+                return error_response(exc, request_id)
+
         @router.post("/{document_id}/publish", response_model=KnowledgeResponseDto)
         async def publish_document_async(document_id: UUID, request: Request):
             request_id = uuid4()

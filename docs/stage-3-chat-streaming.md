@@ -119,50 +119,113 @@ if ($LASTEXITCODE -ne 0) { throw "pip failed" }
 Tests use synthetic mock responses. Passing them does not prove llama.cpp
 generation in Windows.
 
-## Real, incrementally read Persian SSE on Windows
+## Troubleshooting llama.cpp readiness from Windows
 
-This uses `.NET HttpClient` and `ResponseHeadersRead`; unlike
-`Invoke-RestMethod`, it reads lines as they arrive. No token is placed in
-the shell command-line arguments or printed.
+The backend's infrastructure command reports **sanitized diagnostic codes**,
+rather than an opaque `RuntimeError`:
+
+| LLM diagnostic code | Meaning / next action |
+| --- | --- |
+| `connection_failed` | Verify the native llama-server is running on Windows, then inspect host bridge and firewall |
+| `unauthorized` | Check that the existing llama.cpp API key matches `CHATBOT_LLM_API_KEY` in the private .env; never share it |
+| `model_loading` | The runtime reports HTTP 503; check its own console for model load progress or failure |
+| `no_model_loaded` | The models endpoint answered but returned an empty list |
+| `models_endpoint_error`, `health_error` | HTTP endpoint not ready/compatible; check llama.cpp version and actual native-server logs |
+| `timeout`, `network_error` | Inspect networking, firewall and runtime responsiveness |
+| `invalid_models_response` | Models endpoint returned an unexpected JSON shape |
+| `not_configured` | LLM base URL is missing in application configuration |
+
+Do not assume the native runtime is still running after restarting Windows.
+First check whether anything listens on port 8080:
 
 ```powershell
-$KeyLine = Get-Content ".env" | Where-Object { $_ -match '^CHATBOT_DEV_API_TOKEN=' } | Select-Object -First 1
-if (-not $KeyLine) { throw "Missing dev token; rerun env initializer" }
-$Token = $KeyLine.Substring("CHATBOT_DEV_API_TOKEN=".Length)
-if ($Token.Length -lt 32) { throw "Invalid development Chat token" }
-$Http = [System.Net.Http.HttpClient]::new()
-$Http.Timeout = [TimeSpan]::FromMinutes(3)
-$Req = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Post, "http://127.0.0.1:18000/api/v1/chat/stream")
-$Req.Headers.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new("Bearer", $Token)
-$Body = '{"message":"سلام، لطفاً در دو جمله به فارسی پاسخ بده."}'
-$Req.Content = [System.Net.Http.StringContent]::new($Body, [System.Text.Encoding]::UTF8, "application/json")
-$Resp = $Http.SendAsync($Req, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
-Write-Host ("HTTP status: " + [int]$Resp.StatusCode)
-Write-Host ("Content-Type: " + $Resp.Content.Headers.ContentType)
-$Reader = [System.IO.StreamReader]::new($Resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult(), [System.Text.Encoding]::UTF8)
-$Clock = [System.Diagnostics.Stopwatch]::StartNew()
+Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue |
+    Select-Object LocalAddress, LocalPort, OwningProcess
+```
+
+Use the **existing, verified** llama-server executable, model GGUF file and
+secure settings from [Stage 2](stage-2-infrastructure.md). Start it in a
+separate PowerShell window if not running. Avoid changing firewall rules
+without checking the Docker bridge address; keep the API key enabled and never
+expose this service to the public internet.
+
+Once native llama.cpp is running, check host-side readiness **without printing
+the API key**. The model count below must be nonzero; share only the status/count:
+
+```powershell
+$LlmKeyLine = Get-Content -LiteralPath ".env" |
+    Where-Object { $_ -match '^CHATBOT_LLM_API_KEY=' } | Select-Object -First 1
+if (-not $LlmKeyLine) { throw "Missing local LLM API key entry" }
+$LlmKey = $LlmKeyLine.Substring("CHATBOT_LLM_API_KEY=".Length)
+$Headers = @{ Authorization = "Bearer $LlmKey" }
 try {
-    while (($Line = $Reader.ReadLine()) -ne $null) {
-        if ($Line.StartsWith("event: ") -or $Line.StartsWith("data: ")) {
-            Write-Host ("{0:N2}s {1}" -f $Clock.Elapsed.TotalSeconds, $Line)
-        }
+    $Health = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8080/health" -Headers $Headers -TimeoutSec 10 -ErrorAction Stop
+    Write-Host ("Host LLM /health: {0}" -f [int]$Health.StatusCode)
+    $Models = Invoke-RestMethod -Uri "http://127.0.0.1:8080/v1/models" -Headers $Headers -TimeoutSec 10 -ErrorAction Stop
+    $Count = if ($null -ne $Models.data) { @($Models.data).Count } else { 0 }
+    Write-Host ("Host LLM model count: {0}" -f $Count)
+}
+catch {
+    if ($null -ne $_.Exception.Response) {
+        Write-Host ("Host LLM HTTP status: {0}" -f [int]$_.Exception.Response.StatusCode)
+    }
+    else {
+        Write-Host ("Host LLM probe failed: {0}" -f $_.Exception.GetType().Name)
     }
 }
 finally {
-    $Reader.Dispose(); $Resp.Dispose(); $Req.Dispose(); $Http.Dispose()
-    Remove-Variable Token, KeyLine -ErrorAction SilentlyContinue
+    Remove-Variable LlmKey, LlmKeyLine, Headers -ErrorAction SilentlyContinue
 }
+docker compose exec -T app python -m src.infrastructure.scripts.check_infrastructure --llm
 ```
 
-Ensure you receive actual `delta` chunks before `message_end`. For
-cancellation, repeat the request but exit the read loop immediately after the
-first `delta` and dispose `$Resp` in `finally`; then check app/model
-logs for absence of a continuing generation. For model-unavailable behavior,
-stop the native `llama-server.exe` with Ctrl+C in **its own** PowerShell
-window (do not stop Docker, delete data or kill unrelated processes), rerun
-the streaming check and confirm `LLM_UNAVAILABLE`. Restart llama.cpp and
-rerun the success path. There is no automated network outage simulation in
-production; tests already cover mock timeouts, parser and cancellation.
+If Windows host requests pass but the Docker check reports
+`connection_failed`, investigate `host.docker.internal:8080` reachability
+and the Windows firewall policy for the Docker Desktop bridge. If the
+check reports `unauthorized`, validate the key used by llama-server and the
+existing private Compose environment; do not commit or display credentials.
+
+## Real, incrementally read Persian SSE on Windows
+
+Windows PowerShell 5.1 does **not always load `System.Net.Http` by default**.
+The repository now contains a self-contained, fail-fast PowerShell smoke test
+that explicitly loads it with `Add-Type -AssemblyName System.Net.Http`,
+reads the development token from your local `.env`, checks HTTP status and
+prints each SSE event with elapsed time:
+
+```powershell
+.\scripts\test-chat-stream.ps1
+```
+
+Use the following to cancel immediately after the first received delta
+and close the upstream HTTP stream:
+
+```powershell
+.\scripts\test-chat-stream.ps1 -CancelAfterFirstDelta
+```
+
+The script only accepts loopback URLs, will not echo the API token, and
+disposes HTTP resources even on failure. Expected success sequence:
+`message_start`, one or more `delta` events, then `message_end`.
+On a stopped/unavailable model, it prints the `error` event (for example
+`LLM_UNAVAILABLE`) and exits with a descriptive failure; a Stream error
+after response headers retains HTTP 200 as required by SSE.
+
+For a controlled model-unavailable test, stop **only** the native
+`llama-server.exe` in its own window using Ctrl+C (do not terminate Docker,
+delete data or kill unrelated processes), rerun the smoke test, and
+restart the native runtime afterwards. Re-check `--llm` and the success path.
+
+## Why the previous CRLF test failed only on the Windows working tree
+
+The old Python test asserted that the on-disk checkout of
+`src/host/entrypoint.sh` had zero carriage returns. On Windows, a file
+checked out **before** `.gitattributes` was introduced can still contain
+CRLF. The actual Dockerfile already removes CRLF at build time, which
+successfully started your app. The test now verifies that LF-normalization
+produces a valid POSIX entrypoint. CI still deliberately converts the file
+to CRLF and tests the full Docker build, startup and restart. No forced
+checkout, destructive reset or volume deletion is necessary for this fix.
 
 ## Regression and sanitized evidence to share
 
@@ -174,7 +237,7 @@ git log -1 --oneline
 ```
 
 Share the resulting commit SHA, pytest summary, sanitized output from the
-real SSE read (including relative timestamps and Event ordering), HTTP
+real SSE smoke-test output (including relative timestamps and Event ordering), HTTP
 status/content-type, model-unavailable response, cancellation observation,
 and infrastructure check summary. Redact prompt content if not synthetic,
 credentials, `.env`, Authorization headers, host-specific URLs and any

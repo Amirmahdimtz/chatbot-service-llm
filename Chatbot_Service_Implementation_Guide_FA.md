@@ -2,7 +2,7 @@
 
 > **نام فایل:** `Chatbot_Service_Implementation_Guide_FA.md`  
 > **پروژه:** `chatbot-service-llm`  
-> **نسخه سند:** `1.0.5`  
+> **نسخه سند:** `1.0.6`  
 > **تاریخ تدوین:** `2026-11-10`  
 > **وضعیت:** قرارداد محصول و تصمیم‌های معماری مورد توافق؛ برخی تنظیمات مدل و استقرار محلی تا زمان Benchmark قابل اصلاح هستند.  
 > **سند همراه و الزامی:** `Service_Architecture_Guide_FA.md`
@@ -796,6 +796,7 @@ storage:
 | 2026-11-10 | Stage 2 PyPI mirror | انتخاب اختیاری Mirror ران‌فلر برای Docker Build محلی از طریق Build ARG، پیش‌فرض PyPI رسمی در CI و حفظ TLS | تصمیم اجرایی Development؛ آزمون Windows باز |
 | 2026-11-10 | Stage 2 shell line endings | پیشگیری از CRLF در `entrypoint.sh` هنگام Windows Checkout و نرمال‌سازی دفاعی در Docker Build، با CI شبیه‌ساز CRLF | رفع Crash مرحله ۲؛ اعتبارسنجی محلی باز |
 | 2026-11-10 | Stage 3 Chat/SSE/Identity | One-shot bounded SSE over local llama.cpp; no fake conversation persistence; synthetic public Bearer token only in Development; Production fail-closed; concurrency=1 | تصمیم اجرایی Stage 3؛ تست واقعی Windows باز |
+| 2026-11-11 | Stage 3 Windows validation and LLM readiness | Tolerate pre-existing CRLF in Windows worktrees while verifying Docker normalization; use PS 5.1-compatible fail-fast SSE smoke script; report allowlisted LLM readiness causes without secrets | اصلاح خطاهای تأیید محلی Stage 3؛ اتصال واقعی Windows باز |
 
 ---
 
@@ -827,5 +828,6 @@ LLM، Embedding و Reranking محلی، Runtime اصلی llama.cpp، Vector DB �
 | `1.0.3` | `2026-11-10` | امکان انتخاب Runflare PyPI Mirror برای نصب وابستگی‌ها در Docker Build مرحله ۲ و ثبت ملاحظات امنیتی. |
 | `1.0.4` | `2026-11-10` | اصلاح CRLF در Shell EntryPoint برای Docker روی Windows و افزودن تست Integration شبیه‌ساز Checkout ویندوز. |
 | `1.0.5` | `2026-11-10` | ثبت قراردادهای Chat/Conversation/SSE، Error/Concurrency و سیاست Identity آزمایشی Stage 3 بدون Persistence جعلی. |
+| `1.0.6` | `2026-11-11` | اصلاح Test مربوط به CRLF در Windows، بهبود کدهای امن تشخیص آمادگی llama.cpp و افزودن PowerShell 5.1 SSE smoke test. |
 
 **پایان سند — این فایل باید در کنار `Service_Architecture_Guide_FA.md` نگهداری و با تصمیم‌های تأییدشده جدید نسخه‌بندی شود.**

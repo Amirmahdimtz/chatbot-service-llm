@@ -64,9 +64,12 @@ async def check_async(include_llm: bool = False) -> int:
 
     if include_llm:
         try:
-            if not await resolve(LlamaCppProvider).check_ready_async():
-                raise RuntimeError("llama.cpp not ready")
-            print("LLM: passed (health and model API)")
+            readiness = await resolve(LlamaCppProvider).readiness_status_async()
+            if readiness == "ready":
+                print("LLM: passed (health and model API)")
+            else:
+                failed = True
+                print(f"LLM: failed ({readiness})")
         except Exception as exc:
             failed = True
             print(f"LLM: failed ({type(exc).__name__})")

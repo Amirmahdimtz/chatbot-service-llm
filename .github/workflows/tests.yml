@@ -94,3 +94,19 @@ jobs:
               throw "Missing second generated secret"
           }
           Write-Host "CRLF, idempotence, and preservation checks passed."
+      - name: Validate Stage 3 SSE script on Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $Tokens = $null
+          $Errors = $null
+          $ScriptPath = (Resolve-Path ".\scripts\test-chat-stream.ps1").ProviderPath
+          [System.Management.Automation.Language.Parser]::ParseFile(
+              $ScriptPath, [ref]$Tokens, [ref]$Errors
+          ) | Out-Null
+          if ($Errors.Count -ne 0) { throw "Stage 3 PowerShell script contains syntax errors." }
+          Add-Type -AssemblyName System.Net.Http -ErrorAction Stop
+          $Http = [System.Net.Http.HttpClient]::new()
+          $Http.Dispose()
+          Write-Host "PowerShell 5.1 SSE script syntax and HttpClient initialization passed."
+

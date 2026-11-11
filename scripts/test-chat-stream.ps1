@@ -1,0 +1,109 @@
+<#
+Read one local Chat SSE response incrementally on Windows PowerShell 5.1+.
+Never echo credentials or pass them via command-line arguments.
+#>
+[CmdletBinding()]
+param(
+    [string]$ApiUrl = "http://127.0.0.1:18000/api/v1/chat/stream",
+    [switch]$CancelAfterFirstDelta
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+# Windows PowerShell 5.1 does not necessarily preload System.Net.Http.
+Add-Type -AssemblyName System.Net.Http -ErrorAction Stop
+
+$Endpoint = [Uri]$ApiUrl
+if ($Endpoint.Scheme -ne "http" -or
+    $Endpoint.Host -notin @("127.0.0.1", "localhost") -or
+    $Endpoint.AbsolutePath -ne "/api/v1/chat/stream") {
+    throw "This development script only sends credentials to a local HTTP Chat endpoint."
+}
+
+$EnvPath = Join-Path (Split-Path -Parent $PSScriptRoot) ".env"
+if (-not (Test-Path -LiteralPath $EnvPath -PathType Leaf)) {
+    throw "Missing .env file; run scripts/initialize-development-env.ps1."
+}
+$KeyLines = @(Get-Content -LiteralPath $EnvPath | Where-Object { $_ -match '^CHATBOT_DEV_API_TOKEN=' })
+if ($KeyLines.Count -ne 1) {
+    throw "Expected exactly one CHATBOT_DEV_API_TOKEN entry in .env."
+}
+
+$Token = $KeyLines[0].Substring("CHATBOT_DEV_API_TOKEN=".Length)
+if ($Token.Length -lt 32) {
+    throw "CHATBOT_DEV_API_TOKEN is missing or too short."
+}
+$Http = $null
+$Req = $null
+$Resp = $null
+$Reader = $null
+try {
+    $Http = [System.Net.Http.HttpClient]::new()
+    $Http.Timeout = [TimeSpan]::FromMinutes(3)
+    $Req = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Post, $Endpoint)
+    $Req.Headers.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new("Bearer", $Token)
+    $Body = '{"message":"سلام، لطفاً در دو جمله به فارسی پاسخ بده."}'
+    $Req.Content = [System.Net.Http.StringContent]::new(
+        $Body, [System.Text.Encoding]::UTF8, "application/json"
+    )
+    $Clock = [System.Diagnostics.Stopwatch]::StartNew()
+    $Resp = $Http.SendAsync(
+        $Req, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead
+    ).GetAwaiter().GetResult()
+
+    Write-Host ("HTTP status: {0}" -f [int]$Resp.StatusCode)
+    Write-Host ("Content-Type: {0}" -f $Resp.Content.Headers.ContentType)
+    if ([int]$Resp.StatusCode -ne 200) {
+        throw "Chat API returned an unexpected HTTP status; check the local setup."
+    }
+    if ($null -eq $Resp.Content.Headers.ContentType -or
+        $Resp.Content.Headers.ContentType.MediaType -ne "text/event-stream") {
+        throw "Chat API did not return text/event-stream."
+    }
+
+    $Reader = [System.IO.StreamReader]::new(
+        $Resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult(),
+        [System.Text.Encoding]::UTF8
+    )
+    $SawStart = $false
+    $SawEnd = $false
+    $SawError = $false
+    $SawDelta = $false
+    $EventName = ""
+    while (($Line = $Reader.ReadLine()) -ne $null) {
+        if ($Line.StartsWith("event: ")) {
+            $EventName = $Line.Substring(7)
+            if ($EventName -eq "message_start") { $SawStart = $true }
+            if ($EventName -eq "message_end") { $SawEnd = $true }
+            if ($EventName -eq "error") { $SawError = $true }
+            Write-Host ("{0:N2}s {1}" -f $Clock.Elapsed.TotalSeconds, $Line)
+        }
+        elseif ($Line.StartsWith("data: ")) {
+            Write-Host ("{0:N2}s {1}" -f $Clock.Elapsed.TotalSeconds, $Line)
+            if ($EventName -eq "delta") {
+                $SawDelta = $true
+                if ($CancelAfterFirstDelta) {
+                    Write-Host "Client cancelled after first delta."
+                    break
+                }
+            }
+        }
+    }
+
+    if ($CancelAfterFirstDelta) {
+        if (-not $SawDelta) { throw "No delta arrived before the stream ended." }
+    }
+    elseif ($SawError) {
+        throw "Chat model returned an SSE error; see the sanitized event code above."
+    }
+    elseif (-not $SawStart -or -not $SawEnd -or -not $SawDelta) {
+        throw "Incomplete SSE stream: expected start, delta and end events."
+    }
+}
+finally {
+    foreach ($Resource in @($Reader, $Resp, $Req, $Http)) {
+        if ($null -ne $Resource) { $Resource.Dispose() }
+    }
+    Remove-Variable Token, KeyLines -ErrorAction SilentlyContinue
+}

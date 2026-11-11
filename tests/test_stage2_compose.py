@@ -40,8 +40,15 @@ def test_shell_entrypoint_is_normalized_for_windows_checkout():
     assert "*.sh text eol=lf" in attributes
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "RUN sed -i 's/\\r$//' /app/src/host/entrypoint.sh" in dockerfile
+    # A previously checked-out Windows working tree may still contain CRLF even
+    # with .gitattributes. Docker normalizes it during build (verified in CI).
+    # Assert that normalization leaves a valid POSIX script, not that the
+    # developer's working-tree bytes are already LF.
     entrypoint = (ROOT / "src/host/entrypoint.sh").read_bytes()
-    assert b"\r" not in entrypoint
+    normalized = entrypoint.replace(b"\r\n", b"\n")
+    assert b"\r" not in normalized
+    assert normalized.startswith(b"#!/bin/sh\nset -eu\n")
+    assert normalized.rstrip().endswith(b'exec "$@"')
 
 
 def test_pip_index_build_argument_and_local_mirror_template():

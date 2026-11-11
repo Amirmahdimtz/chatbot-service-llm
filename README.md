@@ -6,7 +6,8 @@ Conversation DTOs are defined but **no conversation/history routes or persistenc
 they are stage 4 work. Production Chat fails closed until a trusted identity integration exists.
 
 See [Stage 3 Chat SSE runbook](docs/stage-3-chat-streaming.md) for the API contract,
-PowerShell streaming test, credential setup and remaining Windows acceptance checks.
+PowerShell 5.1 streaming smoke script, sanitized llama.cpp readiness diagnostics,
+credential setup and remaining Windows acceptance checks.
 See [Stage 2 infrastructure runbook](docs/stage-2-infrastructure.md) for Compose,
 PostgreSQL, Qdrant, storage and native llama.cpp prerequisites.
 

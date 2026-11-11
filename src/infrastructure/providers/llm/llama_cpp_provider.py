@@ -47,20 +47,43 @@ class LlamaCppProvider:
         return {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
 
     async def check_ready_async(self) -> bool:
+        return await self.readiness_status_async() == "ready"
+
+    async def readiness_status_async(self) -> str:
+        """Return only bounded diagnostic codes; never return upstream bodies or URLs."""
         if not self._base_url:
-            return False
+            return "not_configured"
         try:
-            async with httpx.AsyncClient(timeout=self._timeout, trust_env=False, headers=self._headers()) as client:
+            # Inference timeout can be long; readiness must fail promptly.
+            async with httpx.AsyncClient(
+                timeout=min(self._timeout, 10.0), trust_env=False, headers=self._headers()
+            ) as client:
                 health = await client.get(f"{self._base_url}/health")
+                if health.status_code in (401, 403):
+                    return "unauthorized"
+                if health.status_code == 503:
+                    return "model_loading"
                 if health.status_code != 200:
-                    return False
+                    return "health_error"
+
                 models = await client.get(f"{self._base_url}/v1/models")
+                if models.status_code in (401, 403):
+                    return "unauthorized"
                 if models.status_code != 200:
-                    return False
-                payload = models.json()
-                return isinstance(payload, dict) and isinstance(payload.get("data"), list) and bool(payload["data"])
-        except (httpx.RequestError, ValueError):
-            return False
+                    return "models_endpoint_error"
+                try:
+                    payload = models.json()
+                except ValueError:
+                    return "invalid_models_response"
+                if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+                    return "invalid_models_response"
+                return "ready" if payload["data"] else "no_model_loaded"
+        except httpx.TimeoutException:
+            return "timeout"
+        except httpx.ConnectError:
+            return "connection_failed"
+        except httpx.RequestError:
+            return "network_error"
 
     async def stream_chat_async(self, message: str) -> AsyncIterator[str]:
         if not self._base_url:

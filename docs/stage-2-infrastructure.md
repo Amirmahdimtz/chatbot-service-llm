@@ -159,6 +159,11 @@ Invoke-RestMethod -Uri http://127.0.0.1:8080/health -Headers $Headers
 docker compose exec -T app python -m src.infrastructure.scripts.check_infrastructure --llm
 ```
 
+For the Qwen3-1.7B **Stage 3 chat** workflow, use the documented
+[non-thinking launch override](stage-3-chat-streaming.md#qwen3-fix-empty-text-after-exhausting-the-256-token-budget)
+in addition to these baseline flags. Default Qwen3 thinking may consume the
+entire short response budget without emitting any final answer text.
+
 The app starts normally if llama.cpp is off. The `--llm` check explicitly
 returns a failure, not a fabricated model result. Qdrant uses the logical
 collection names `knowledge_public` and `knowledge_internal`; collections

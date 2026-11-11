@@ -58,6 +58,7 @@ async def test_openai_stream_parses_utf8_and_does_not_buffer_until_done(monkeypa
     assert body["stream"] is True and body["max_tokens"] == 256
     assert body["messages"][-1] == {"role": "user", "content": "درود"}
     assert "model" not in body
+    assert "chat_template_kwargs" not in body  # Default for other models is unchanged.
 
 
 @pytest.mark.asyncio
@@ -143,3 +144,47 @@ async def test_cancellation_releases_connection_and_slot(monkeypatch):
         await task
     assert closed.is_set()
     assert instance._slots._value == 1
+
+
+@pytest.mark.asyncio
+async def test_qwen3_nonthinking_mode_requests_final_answer_not_reasoning(monkeypatch):
+    observed = []
+
+    def handler(request):
+        observed.append(json.loads(request.content))
+        # A reasoning-only packet must never leak into user-visible SSE text.
+        return httpx.Response(200, text=(
+            'data: {"choices":[{"delta":{"reasoning_content":"private chain"}}]}\n\n'
+            'data: {"choices":[{"delta":{"content":"سلام"}}]}\n\n'
+            'data: [DONE]\n\n'
+        ))
+
+    configure_transport(monkeypatch, handler)
+    config = StubConfig({"llm.base_url": "http://localhost:8080", "llm.enable_thinking": False})
+    result = [chunk async for chunk in LlamaCppProvider(config).stream_chat_async("سلام")]
+    assert result == ["سلام"]
+    assert observed[0]["chat_template_kwargs"] == {"enable_thinking": False}
+    assert observed[0]["messages"][-1]["content"] == "سلام"
+    assert observed[0]["max_tokens"] == 256
+
+
+@pytest.mark.asyncio
+async def test_reasoning_only_with_no_answer_produces_no_delta(monkeypatch):
+    response = (
+        'data: {"choices":[{"delta":{"reasoning_content":"do not expose this"}}]}\n\n'
+        'data: {"choices":[{"delta":{"content":null},"finish_reason":"length"}]}\n\n'
+        'data: [DONE]\n\n'
+    )
+    configure_transport(monkeypatch, lambda request: httpx.Response(200, text=response))
+    instance = LlamaCppProvider(StubConfig({
+        "llm.base_url": "http://localhost:8080", "llm.enable_thinking": False
+    }))
+    assert [chunk async for chunk in instance.stream_chat_async("synthetic")] == []
+
+
+@pytest.mark.parametrize("value", ["false", 0, None, []])
+def test_nonthinking_config_requires_explicit_boolean(value):
+    with pytest.raises(ValueError, match="llm.enable_thinking"):
+        LlamaCppProvider(StubConfig({
+            "llm.base_url": "http://localhost:8080", "llm.enable_thinking": value
+        }))

@@ -42,6 +42,9 @@ class LlamaCppProvider:
         self._slots = asyncio.Semaphore(concurrency)
         model_name = config_reader.get("llm.model_name", "")
         self._model_name = model_name if isinstance(model_name, str) else ""
+        self._enable_thinking = config_reader.get("llm.enable_thinking", True)
+        if not isinstance(self._enable_thinking, bool):
+            raise ValueError("llm.enable_thinking must be a boolean")
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
@@ -102,6 +105,12 @@ class LlamaCppProvider:
                 "stream": True,
                 "max_tokens": self._max_tokens,
             }
+            if not self._enable_thinking:
+                # Qwen3 defaults to thinking. On a small CPU token budget, all
+                # tokens can be spent on reasoning_content and no answer text.
+                # Also start recent llama.cpp with --reasoning off: newer
+                # versions may ignore this per-request template override.
+                body["chat_template_kwargs"] = {"enable_thinking": False}
             if self._model_name:
                 body["model"] = self._model_name
             timeout = httpx.Timeout(connect=5.0, read=self._timeout, write=10.0, pool=5.0)

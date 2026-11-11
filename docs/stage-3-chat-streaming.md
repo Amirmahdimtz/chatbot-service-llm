@@ -58,9 +58,25 @@ signaled as `LLM_BUSY` **inside the SSE stream** (HTTP status remains 200).
 
 The provider sends an async streaming request to the installed llama.cpp
 `POST /v1/chat/completions`. Model name is omitted for the single-model
-server; override `llm.model_name` if a router requires it. Chat templates and
-the Qwen3 reasoning mode require verification against the actual local build;
-this stage does not assert a measured Persian quality/TTFT or model speed.
+server; override `llm.model_name` if a router requires it. The initial
+Qwen3-1.7B model has **thinking enabled by default**. With only 256 output
+tokens, the model may exhaust its budget on `reasoning_content`, which is
+intentionally never exposed as an SSE `delta`, returning
+`LLM_EMPTY_RESPONSE` after a long generation. The provider now passes
+`chat_template_kwargs: {"enable_thinking": false}` when
+`llm.enable_thinking: false` (the Stage 3 default); the parameter is
+validated as a strict boolean and is configurable for future models.
+Recent llama.cpp builds may ignore or deprecate this per-request kwarg, so
+**also start the native Qwen3 server with `--reasoning off`** after checking
+your installed executable's help. Qwen documentation identifies non-thinking
+as the appropriate setting for short direct answers; see
+[Qwen3 model card](https://huggingface.co/Qwen/Qwen3-1.7B)
+and [llama.cpp server arguments](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md).
+
+The local CPU baseline has been measured in Windows logs at roughly
+5 generated tokens/second with 256 tokens exhausted and no answer text.
+This is not evidence of successful Persian answer quality or time-to-first
+visible token; those require a new live test after disabling reasoning.
 
 ## Get the committed code without overwriting local changes
 
@@ -184,6 +200,69 @@ If Windows host requests pass but the Docker check reports
 and the Windows firewall policy for the Docker Desktop bridge. If the
 check reports `unauthorized`, validate the key used by llama-server and the
 existing private Compose environment; do not commit or display credentials.
+
+## Qwen3: fix empty text after exhausting the 256-token budget
+
+If the native runtime is healthy but real SSE waits roughly 55–80 seconds and
+ends with `LLM_EMPTY_RESPONSE`, inspect the local server timing output:
+`n_gen = 256` with no `delta.content` is consistent with Qwen3 consuming the
+entire output budget in thinking mode. It is **not** a network failure and
+increasing the token budget is not an appropriate default for 16GB CPU-only
+development.
+
+After pulling this change, restart the **existing** Windows-hosted
+`llama-server.exe` in its own PowerShell console (stop the running instance
+with Ctrl+C, not by killing Docker). First confirm native support:
+
+```powershell
+$LlamaExecutable = (Get-Command llama-server.exe -ErrorAction Stop).Source
+& $LlamaExecutable --help 2>&1 | Select-String -- "--reasoning"
+```
+
+For a recent executable supporting `--reasoning off`, start it with the
+same GGUF, existing secret and conservative CPU flags. This example assumes
+the confirmed file path from the previous local test and reads the key from
+the existing private `.env` without printing it:
+
+```powershell
+Set-Location "D:\chatbot-service-llm"
+$LlamaExecutable = (Get-Command llama-server.exe -ErrorAction Stop).Source
+$ModelPath = "D:\models\Qwen3-1.7B-Q4_K_M.gguf"
+if (-not (Test-Path -LiteralPath $ModelPath -PathType Leaf)) {
+    throw "GGUF file is missing at the configured path."
+}
+$KeyLine = Get-Content -LiteralPath ".env" |
+    Where-Object { $_ -match '^CHATBOT_LLM_API_KEY=' } | Select-Object -First 1
+if (-not $KeyLine) { throw "Missing LLM key entry in .env." }
+$env:LLAMA_API_KEY = $KeyLine.Substring("CHATBOT_LLM_API_KEY=".Length)
+if (-not $env:LLAMA_API_KEY) { throw "Configured LLM key is empty." }
+
+& $LlamaExecutable -m $ModelPath --host 0.0.0.0 --port 8080 `
+    --threads 4 --ctx-size 2048 --parallel 1 --n-gpu-layers 0 `
+    --reasoning off
+```
+
+Only use `--host 0.0.0.0` on a secured, trusted development network with
+proper firewall restrictions. If `--reasoning` is unsupported, do not invent
+replacement flags or modify the model file: send the redacted
+`llama-server.exe --version` and relevant `--help` output so a version-specific
+solution can be validated. The application-side per-request kwarg is still
+sent, but it is not a guarantee for every llama.cpp version.
+
+In a second PowerShell window:
+
+```powershell
+docker compose up -d --build --wait
+docker compose exec -T app python -m src.infrastructure.scripts.check_infrastructure --llm
+.\scripts\test-chat-stream.ps1
+.\scripts\test-chat-stream.ps1 -CancelAfterFirstDelta
+```
+
+A successful stream must contain actual answer `delta` events, **not**
+`reasoning_content` or a raw `<think>` block. The cancellation test is
+only meaningful after a delta has actually arrived. If the server still
+returns no text, provide the sanitized SSE event codes and timing summary,
+not raw prompts, thought content or credentials.
 
 ## Real, incrementally read Persian SSE on Windows
 

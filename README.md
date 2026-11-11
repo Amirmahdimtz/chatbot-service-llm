@@ -5,6 +5,11 @@ Windows-hosted local `llama.cpp` model, with bounded concurrency and safe stream
 Conversation DTOs are defined but **no conversation/history routes or persistence exist yet**;
 they are stage 4 work. Production Chat fails closed until a trusted identity integration exists.
 
+The initial Qwen3-1.7B model uses non-thinking chat settings; recent native
+llama.cpp builds should be launched with `--reasoning off` to avoid consuming
+the small 256-token budget before any final answer. Windows live confirmation
+remains outstanding.
+
 See [Stage 3 Chat SSE runbook](docs/stage-3-chat-streaming.md) for the API contract,
 PowerShell 5.1 streaming smoke script, sanitized llama.cpp readiness diagnostics,
 credential setup and remaining Windows acceptance checks.

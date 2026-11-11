@@ -115,6 +115,25 @@ def test_unavailable_runtime_is_safe_sse_failure(dev_app, monkeypatch):
     assert events[-1][1]["status"] == "failed"
 
 
+def test_reasoning_only_stream_returns_sanitized_empty_response(dev_app, monkeypatch):
+    mock_stream(
+        monkeypatch,
+        text=(
+            'data: {"choices":[{"delta":{"reasoning_content":"private reasoning"}}]}\n\n'
+            'data: {"choices":[{"delta":{"content":null},"finish_reason":"length"}]}\n\n'
+            'data: [DONE]\n\n'
+        ),
+    )
+    with TestClient(dev_app) as client:
+        response = client.post("/api/v1/chat/stream", json={"message": "hello"},
+                               headers={"Authorization": f"Bearer {TOKEN}"})
+    assert response.status_code == 200
+    events = events_from(response)
+    assert [name for name, _ in events] == ["message_start", "error", "message_end"]
+    assert events[1][1]["code"] == "LLM_EMPTY_RESPONSE"
+    assert "private reasoning" not in response.text
+
+
 def test_production_denies_dev_token_even_if_present(monkeypatch):
     monkeypatch.setenv("ENV_TYPE", "production")
     monkeypatch.setenv("CHATBOT_DEV_API_TOKEN", TOKEN)

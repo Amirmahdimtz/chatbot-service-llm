@@ -17,7 +17,7 @@ from src.infrastructure.repositories.conversation.conversation_repository import
 from src.infrastructure.repositories.feedback.feedback_repository import FeedbackRepository
 
 
-class TestDatabaseConfig:
+class IsolatedDatabaseConfig:
     def __init__(self, url):
         self.url = url
 
@@ -33,7 +33,7 @@ async def test_postgres_owner_scoping_concurrent_sequence_and_feedback():
         pytest.skip("No dedicated PostgreSQL integration-test URL")
     if os.getenv("CHATBOT_TEST_DATABASE_ISOLATED") != "1" or not url.startswith("postgresql+asyncpg://"):
         pytest.skip("PostgreSQL test requires explicitly designated isolated database")
-    context = PsqlDbContext(TestDatabaseConfig(url))
+    context = PsqlDbContext(IsolatedDatabaseConfig(url))
     try:
         conversation_service = ConversationService(ConversationRepository(context), ChatMessageRepository(context))
         feedback_service = FeedbackService(FeedbackRepository(context))

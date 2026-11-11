@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 class FeedbackCreateDto(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    message_id: UUID
+    message_id: UUID = Field(strict=False)
     kind: Literal["positive", "negative", "incorrect"]
     comment: str | None = Field(default=None, max_length=2000)
 

@@ -158,3 +158,25 @@ def test_internal_same_subject_different_tenants_cannot_read_conversation(app, m
             json={"message": "cross tenant", "conversation_id": identifier},
             headers=HEADERS).status_code == 404
         assert client.get("/api/v1/conversation/", headers=HEADERS).json()["items"] == []
+
+
+def test_internal_claims_fail_closed_for_all_protected_endpoints(app, monkeypatch):
+    actors = [
+        ChatIdentity("staff", "internal", frozenset({"knowledge:read_internal"}), None),
+        ChatIdentity("staff", "internal", frozenset({"knowledge:read_internal"}), ""),
+        ChatIdentity("staff", "internal", frozenset(), "tenant-1"),
+        ChatIdentity("staff", "internal", frozenset({"unknown:permission"}), "tenant-1"),
+        ChatIdentity("", "internal", frozenset({"knowledge:read_internal"}), "tenant-1"),
+        ChatIdentity("staff", "forged", frozenset({"knowledge:read_internal"}), "tenant-1"),
+    ]
+    for identity in actors:
+        monkeypatch.setattr(ChatIdentityService, "authenticate", lambda self, auth, identity=identity: identity)
+        with TestClient(app) as client:
+            for path in ("/api/v1/conversation/", "/api/v1/knowledge/"):
+                result = client.get(path, headers=HEADERS)
+                assert result.status_code == 403
+                assert result.json()["error"]["code"] == "FORBIDDEN"
+            result = client.post("/api/v1/chat/stream", json={
+                "message": "سؤال داخلی", "scenario": "general",
+            }, headers=HEADERS)
+            assert result.status_code == 403

@@ -4,7 +4,7 @@ Stage 6 preserves the existing Chat endpoint and database schema. The default ge
 
 ## Runtime contract
 
-POST /api/v1/chat/stream accepts {"message":"...","scenario":"knowledge_qa","conversation_id":"optional-uuid"}. Unknown scenario and client-provided audience/tenant/permission claims do not grant access. The backend authorizes the route before creating a conversation exchange. Production has no development identity.
+POST /api/v1/chat/stream accepts {"message":"...","scenario":"knowledge_qa","conversation_id":"optional-uuid"}. Unknown scenario and client-provided audience/tenant/permission claims do not grant access. At the shared HTTP authentication boundary, internal identities require a nonempty trusted tenant and an explicitly recognized permission; each action enforces its own narrower permission. The backend authorizes the Chat route before creating a conversation exchange. Production has no development identity.
 
 Event sequence for a grounded answer:
 - message_start: request_id, message_id, conversation_id, scenario and route

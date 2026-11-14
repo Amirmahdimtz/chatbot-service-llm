@@ -150,7 +150,7 @@ def test_cross_user_and_internal_access_are_not_disclosed(app, monkeypatch):
         if value == "Bearer bob-test":
             return ChatIdentity("bob", "public")
         if value == "Bearer internal-test":
-            return ChatIdentity("alice", "internal", frozenset({"knowledge:write"}))
+            return ChatIdentity("alice", "internal", frozenset({"knowledge:write"}), "synthetic-tenant")
         return original(self, value)
 
     monkeypatch.setattr(ChatIdentityService, "authenticate", with_synthetic_users)

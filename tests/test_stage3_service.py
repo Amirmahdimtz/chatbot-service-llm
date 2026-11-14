@@ -6,6 +6,7 @@ import pytest
 
 from src.core.services.chat.chat_identity_service import ChatIdentity
 from src.core.services.chat.chat_service import ChatService
+from src.core.services.scenario_router.scenario_router_service import ScenarioRouterService
 from src.infrastructure.providers.llm.llama_cpp_provider import LlmStreamError
 
 

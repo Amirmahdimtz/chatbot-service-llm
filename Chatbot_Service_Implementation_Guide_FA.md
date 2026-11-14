@@ -847,6 +847,7 @@ storage:
 
 | 2026-11-11 | Stage 5 Debian APT connectivity | تنظیم پیش‌فرض HTTPS برای مخازن Debian، محدودسازی Retry/Timeout و افزودن امکان انتخاب Mirror معتبر بدون دورزدن امضای APT؛ برای اختلال شبکه Docker Desktop | اصلاح راه‌اندازی؛ تأیید Windows باز |
 
+| 2026-11-14 | Stage 5 reranking candidate budget | افزودن سقف اختیاری `retrieval.rerank_candidates` در بازه ۵ تا ۲۰، برش پس از RRF و بررسی مجوز، پیش‌فرض ۲۰ بدون تغییر؛ آزمایش A/B روی همان ۲۰ پرسش با داده ایزوله پیش از هر توصیه Production | پیاده‌سازی تنظیم قابل‌بازگشت؛ Benchmark جدید Windows باز |
 | 2026-11-14 | Stage 5 Persian benchmark | اسکریپت مستقل و قابل تکرار برای داده فارسی ساختگی، API واقعی Public، `Recall@5`، `MRR@5`، Citation Structure و Latency؛ بدون حذف داده یا ورود به مرحله ۶ | پیاده‌سازی Harness؛ ارزیابی واقعی Windows باز |
 
 | 2026-11-11 | Stage 5 Debian APT strict update | فعال‌سازی `APT::Update::Error-Mode=any` برای شکست قطعی Build در دانلود ناقص ایندکس؛ رد Mirror دارای خطای TLS؛ راهنمای تست بدون خطای Quoting در PowerShell | اصلاح CI؛ تأیید شبکه Windows باز |
@@ -876,6 +877,7 @@ LLM، Embedding و Reranking محلی، Runtime اصلی llama.cpp، Vector DB �
 | نسخه | تاریخ | تغییر |
 |---|---|---|
 | `1.0.0` | `2026-11-10` | تدوین سند جامع از تصمیم‌های توافق‌شده درباره هسته چت‌بات، پنج سناریو، Agent داخلی، یک Deployment، LLM محلی، Qdrant، RAG، SSE، Storage، تست و سخت‌افزار محلی. |
+| `1.2.4` | `2026-11-14` | ثبت نتایج واقعی Benchmark ایزوله ۱۰ سند/۲۰ سؤال و افزودن تنظیم اختیاری کنترل تعداد Candidateهای Reranking با پیش‌فرض بدون تغییر، برای آزمون A/B بدون حذف داده. |
 | `1.2.3` | `2026-11-14` | افزودن قرارداد Benchmark خودکار فارسی مرحله ۵ با ۱۰ سند/۲۰ پرسش و مسیر اجرای ایزوله؛ نتایج کیفیت و Performance محلی همچنان بازند. |
 | `1.2.2` | `2026-11-11` | توقف Build هنگام خطای دریافت APT Index و اصلاح دستور تشخیصی PowerShell؛ عدم پذیرش Mirror با خطای TLS. |
 | `1.2.1` | `2026-11-11` | اصلاح Download وابستگی‌های Stage 5 در Dockerfile: Debian HTTPS، Retry/Timeout و Mirror اختیاری؛ مستندات تشخیص مشکل شبکه Docker Desktop. |

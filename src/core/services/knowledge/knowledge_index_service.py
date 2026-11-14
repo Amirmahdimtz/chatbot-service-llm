@@ -59,10 +59,13 @@ class KnowledgeIndexService:
         self._stale_minutes = int(config_reader.get("ingestion.stale_processing_minutes", 180))
         self._first_stage = int(config_reader.get("retrieval.first_stage", 20))
         self._final = int(config_reader.get("retrieval.final", 5))
+        # Optional second-stage budget: default retains existing full reranking.
+        self._rerank_candidates = int(config_reader.get("retrieval.rerank_candidates", self._first_stage))
         self._rrf_k = int(config_reader.get("retrieval.rrf_k", 60))
         if not (16 <= self._chunk_size <= 4096 and 0 <= self._overlap < self._chunk_size
                 and 1 <= self._max_chunks <= 10000 and 10 <= self._stale_minutes <= 1440
-                and 1 <= self._final <= self._first_stage <= 100 and 1 <= self._rrf_k <= 1000):
+                and 1 <= self._final <= self._rerank_candidates <= self._first_stage <= 100
+                and 1 <= self._rrf_k <= 1000):
             raise ValueError("Invalid ingestion/retrieval configuration")
 
     async def _owned_async(self, identity: ChatIdentity, document_id: str):
@@ -239,6 +242,9 @@ class KnowledgeIndexService:
                 break
         if not valid:
             return []
+        # Only the highest fused, authorized candidates enter the CPU-heavy cross-encoder.
+        # Keep the original RRF ordering and full text/citations; never bypass reranking.
+        valid = valid[:self._rerank_candidates]
         reranked = await self._reranking.rerank_async(query, [item["payload"]["text"] for item in valid])
         results = []
         for position, score in reranked[:self._final]:

@@ -20,6 +20,7 @@ _ENV_OVERRIDES = {
     "embedding.api_key": "CHATBOT_EMBEDDING_API_KEY",
     "reranking.base_url": "CHATBOT_RERANKING_BASE_URL",
     "reranking.api_key": "CHATBOT_RERANKING_API_KEY",
+    "retrieval.rerank_candidates": "CHATBOT_RERANK_CANDIDATES",
     "llm.base_url": "CHATBOT_LLM_BASE_URL",
     "llm.api_key": "CHATBOT_LLM_API_KEY",
     "llm.timeout_seconds": "CHATBOT_LLM_TIMEOUT_SECONDS",

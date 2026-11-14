@@ -87,6 +87,57 @@ docker compose --project-name stage5-fa-benchmark ps
 
 Once health and migrations are verified, run the CLI above with `--base-url http://127.0.0.1:18010 --mode full` and a new run ID/output filename. `preexisting_owned_documents` should be zero on a fresh stack. If you need to stop only this stack, use `docker compose --project-name stage5-fa-benchmark stop` **without** `-v`. Do not remove named volumes. PowerShell environment overrides only affect the current terminal session; review them before using the regular stack again.
 
+## Stage 5 CPU reranking A/B: same corpus, no new documents
+
+The isolated 10-document/20-question Windows run on 2026-11-14 achieved document-level Recall@5=1.0, MRR@5=1.0, 0 citation structure issues and 0 external hits; mean search latency was **68,769.11 ms** and p95 **82,689.83 ms**. These are **user-measured baseline values** on an i7-6700 CPU, not a performance acceptance target. No separate stage timings were captured for this full run. Earlier profiling of a one-document run identified CPU reranking as the dominant cost. With 10 short documents, the default second stage can rerank 10 candidates even though only 5 final hits are returned.
+
+A reversible **opt-in** setting, `CHATBOT_RERANK_CANDIDATES`, caps the number of **RRF-ordered, authorization-validated** candidates sent to the local reranker. Default is `20` (unchanged behavior); valid range is from `retrieval.final=5` through `retrieval.first_stage=20`. This setting does **not** change dense/sparse retrieval, RRF, access filters, Qdrant schema, chunk storage or citation text. Restricting the set **can hurt Recall@5 or MRR@5** if a relevant document was outside the RRF top 5, so it is **not** a recommended production change without measurement.
+
+The following uses the **already created** `stage5-fa-benchmark` Compose project and **reuses** the exact run ID `fa20261114125025` (ten already approved fixture documents). It only recreates the isolated **app** container; existing PostgreSQL/Qdrant containers and named volumes are preserved. On a new PowerShell session, reapply all the same port/storage overrides. Do **not** execute `docker compose down -v`, `git reset --hard`, or any deletion command.
+
+```powershell
+Set-Location "D:\chatbot-service-llm"
+if (git status --porcelain) { throw "Review local changes before pull" }
+git pull --ff-only origin main
+if ($LASTEXITCODE -ne 0) { throw "Pull failed" }
+$env:CHATBOT_APP_PORT = "18010"
+$env:POSTGRES_HOST_PORT = "15442"
+$env:QDRANT_HOST_PORT = "16343"
+$env:CHATBOT_STORAGE_HOST_PATH = "D:\chatbot-stage5-fa-storage"
+$env:CHATBOT_PIP_INDEX_URL = "https://mirror-pypi.runflare.com/simple/"
+$env:CHATBOT_RERANK_CANDIDATES = "5"
+docker compose --project-name stage5-fa-benchmark config --quiet
+if ($LASTEXITCODE -ne 0) { throw "Invalid isolated Compose configuration" }
+docker compose --project-name stage5-fa-benchmark up -d --build --no-deps --force-recreate --wait app
+if ($LASTEXITCODE -ne 0) { throw "Isolated app rebuild failed" }
+docker compose --project-name stage5-fa-benchmark ps
+```
+
+Re-run the real benchmark with **exactly the existing run ID**, but a new report path. The script lists and **reuses** already approved documents; it does not duplicate them. It still requires the explicit synthetic-write authorization flag because this is the same safe ingestion-capable CLI:
+
+```powershell
+$Python = ".\.venv\Scripts\python.exe"
+$Line = Get-Content ".env" | Where-Object { $_ -match '^CHATBOT_DEV_API_TOKEN=' } | Select-Object -Last 1
+if (-not $Line) { throw "Missing development token" }
+$env:CHATBOT_DEV_API_TOKEN = ($Line -split '=', 2)[1].Trim().Trim('"', "'")
+try {
+  & $Python -m src.infrastructure.scripts.benchmark_stage5_fa `
+      --base-url http://127.0.0.1:18010 `
+      --mode full --run-id fa20261114125025 `
+      --output benchmarks/results/fa20261114125025-cap5.json `
+      --timeout-seconds 600 --confirm-write
+  if ($LASTEXITCODE -ne 0) { throw "Candidate-budget benchmark failed" }
+} finally {
+  Remove-Item Env:CHATBOT_DEV_API_TOKEN -ErrorAction SilentlyContinue
+}
+$Baseline = Get-Content benchmarks/results/fa20261114125025-full.json -Raw -Encoding UTF8 | ConvertFrom-Json
+$Candidate5 = Get-Content benchmarks/results/fa20261114125025-cap5.json -Raw -Encoding UTF8 | ConvertFrom-Json
+$Baseline.metrics | Format-List
+$Candidate5.metrics | Format-List
+```
+
+Compare both results on the **same run and corpus**, including `recall_at_5`, `mrr_at_5`, `citation_issues_at_5`, `mean_latency_ms`, `p95_latency_ms` and `shared_corpus_warning`. If quality regresses, restore `$env:CHATBOT_RERANK_CANDIDATES = "20"` and recreate **only** the isolated app with the same `up -d --no-deps --force-recreate --wait app` command. Do not deploy the candidate cap on the main app until results are reviewed. The 10-document sample remains small and cannot justify a general production SLA.
+
 ## Checks and interpretation
 
 ```powershell

@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import hmac
 import os
+from uuid import NAMESPACE_URL, uuid5
 
 from src.infrastructure.di.inject import inject
 from src.infrastructure.utils.config_reader import ConfigReader
@@ -15,6 +16,16 @@ class ChatIdentity:
     audience: str
     permissions: frozenset[str] = field(default_factory=frozenset)
     tenant_id: str | None = None
+
+
+def scoped_conversation_owner(identity: ChatIdentity) -> str:
+    """Tenant-isolated conversation/feedback owner without changing public legacy IDs."""
+    if identity.audience != "internal":
+        return identity.subject
+    # Length-prefix encoding avoids ambiguous concatenation between tenant and subject.
+    tenant = identity.tenant_id or ""
+    key = f"{len(tenant)}:{tenant}{len(identity.subject)}:{identity.subject}"
+    return "internal:" + str(uuid5(NAMESPACE_URL, key))
 
 
 @inject

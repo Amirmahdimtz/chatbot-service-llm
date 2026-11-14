@@ -2,7 +2,7 @@
 
 > **نام فایل:** `Chatbot_Service_Implementation_Guide_FA.md`  
 > **پروژه:** `chatbot-service-llm`  
-> **نسخه سند:** `1.2.2`  
+> **نسخه سند:** `1.3.0`  
 > **تاریخ تدوین:** `2026-11-10`  
 > **وضعیت:** قرارداد محصول و تصمیم‌های معماری مورد توافق؛ برخی تنظیمات مدل و استقرار محلی تا زمان Benchmark قابل اصلاح هستند.  
 > **سند همراه و الزامی:** `Service_Architecture_Guide_FA.md`
@@ -827,6 +827,10 @@ storage:
 | 2026-11-10 | Dev Environment | Windows 11، CPU-only، 16GB، Docker Compose | قطعی بر اساس سخت‌افزار گزارش‌شده |
 | 2026-11-10 | تست داده‌ها | Fixtureهای ساختگی و قرارداد Import برای داده واقعی سازمان | قطعی |
 | 2026-11-10 | Authentication/Approval | SSO و سیاست تصویب نهایی متعلق به سازمان؛ اتصال امن و تحلیل قابل تحویل | قطعی در حد مسئولیت |
+| 2026-11-14 | Stage 6 routing | `general` → `direct_llm` (legacy default), `knowledge_qa` → `rag`; specialized scenarios remain outside Stage 6 | Stage 6 implementation |
+| 2026-11-14 | RAG evidence policy | Stage 5 authorized Retrieval only; conservative UTF-8-byte context budget and query-aware excerpt for oversized chunks; no fixed-prefix reranker truncation, SSE metadata excludes source URI | Stage 6 implementation |
+| 2026-11-14 | Internal retrieval policy | Require non-empty trusted Tenant and `knowledge:read_internal` | Stage 6 hardening |
+| 2026-11-14 | SSE metadata | `message_start` carries `scenario`/`route`; `sources` precedes `delta`; completed `message_end` carries `response_type` | Stage 6 implementation |
 | 2026-11-11 | Stage 4 Persistence | UUID متنی، ترتیب اتمیک Turn، Streaming status و History با Ownership و Audience در PostgreSQL | پیاده‌سازی مرحله ۴ |
 | 2026-11-11 | Stage 4 SSE disconnect cleanup | محافظت از commit وضعیت `cancelled` و بستن LLM generator با AnyIO shield در لغو ASGI Task؛ تست واقعی disconnect در ASGI | اصلاح رگرسیون مرحله ۴؛ نیازمند تأیید Windows |
 | 2026-11-11 | Feedback | تنها پیام completed متعلق به مالک؛ یک بازخورد برای هر actor/message؛ تکرار HTTP 409 | پیاده‌سازی مرحله ۴ |
@@ -879,6 +883,7 @@ LLM، Embedding و Reranking محلی، Runtime اصلی llama.cpp، Vector DB �
 | نسخه | تاریخ | تغییر |
 |---|---|---|
 | `1.0.0` | `2026-11-10` | تدوین سند جامع از تصمیم‌های توافق‌شده درباره هسته چت‌بات، پنج سناریو، Agent داخلی، یک Deployment، LLM محلی، Qdrant، RAG، SSE، Storage، تست و سخت‌افزار محلی. |
+| `1.3.0` | `2026-11-14` | Stage 6: scenario routing, authorized RAG, citation metadata, internal tenant/permission guard and SSE response types. |
 | `1.2.7` | `2026-11-14` | ثبت نتایج واقعی آزمایش معکوس ۲۰ سؤال و آزمون منفی پنج سند بلند، رد برش ثابت ۱۲۰ کاراکتری به‌علت افت MRR و حفظ رفتار اصلی Retrieval؛ مستندسازی مسیر بررسی Query-aware در آینده. |
 | `1.2.6` | `2026-11-14` | افزودن Harness آزمایش A/B با ترتیب معکوس و منفی‌کنترل اطلاعات انتهای سند؛ بدون تغییر منطق Production یا Persistence؛ نتیجه اجرای مدل واقعی Windows باز است. |
 | `1.2.5` | `2026-11-14` | افزودن ابزار تشخیصی read-only برای اندازه‌گیری متن‌های واقعی ورودی Reranker و امکان A/B Prefix فقط در محیط ایزوله؛ تست سنجش Performance واقعی هنوز باز است. |

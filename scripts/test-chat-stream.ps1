@@ -6,7 +6,9 @@ Never echo credentials or pass them via command-line arguments.
 param(
     [string]$ApiUrl = "http://127.0.0.1:18000/api/v1/chat/stream",
     [switch]$CancelAfterFirstDelta,
-    [string]$ConversationId
+    [string]$ConversationId,
+    [ValidateSet("general", "knowledge_qa")]
+    [string]$Scenario = "general"
 )
 
 Set-StrictMode -Version Latest
@@ -47,6 +49,9 @@ try {
     # Keep this script ASCII-only: Windows PowerShell 5.1 reads UTF-8 without BOM as ANSI.
     # JSON Unicode escapes reconstruct the Persian request after JSON decoding.
     $Body = '{"message":"\u0633\u0644\u0627\u0645\u060c \u0644\u0637\u0641\u0627\u064b \u062f\u0631 \u062f\u0648 \u062c\u0645\u0644\u0647 \u0628\u0647 \u0641\u0627\u0631\u0633\u06cc \u067e\u0627\u0633\u062e \u0628\u062f\u0647."}'
+    if ($Scenario -eq "knowledge_qa") {
+        $Body = $Body.Substring(0, $Body.Length - 1) + ',"scenario":"knowledge_qa"}'
+    }
     if ($ConversationId) {
         $ParsedId = [Guid]::Empty
         if (-not [Guid]::TryParse($ConversationId, [ref]$ParsedId)) {
@@ -80,6 +85,7 @@ try {
     $SawEnd = $false
     $SawError = $false
     $SawDelta = $false
+    $SawSources = $false
     $EventName = ""
     while (($Line = $Reader.ReadLine()) -ne $null) {
         if ($Line.StartsWith("event: ")) {
@@ -87,6 +93,7 @@ try {
             if ($EventName -eq "message_start") { $SawStart = $true }
             if ($EventName -eq "message_end") { $SawEnd = $true }
             if ($EventName -eq "error") { $SawError = $true }
+            if ($EventName -eq "sources") { $SawSources = $true }
             Write-Host ("{0:N2}s {1}" -f $Clock.Elapsed.TotalSeconds, $Line)
         }
         elseif ($Line.StartsWith("data: ")) {
@@ -109,6 +116,9 @@ try {
     }
     elseif (-not $SawStart -or -not $SawEnd -or -not $SawDelta) {
         throw "Incomplete SSE stream: expected start, delta and end events."
+    }
+    if ($Scenario -eq "knowledge_qa" -and -not $SawSources) {
+        Write-Host "No authorized sources returned; inspect response_type for insufficient_evidence."
     }
 }
 finally {

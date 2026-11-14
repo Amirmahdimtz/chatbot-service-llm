@@ -12,7 +12,7 @@ from src.application.auth import api_error, authenticate_request
 from src.application.chat.dtos.chat_dto import ChatRequestDto
 from src.core.services.chat.chat_identity_service import ChatIdentityService
 from src.core.services.chat.chat_service import ChatService
-from src.core.services.errors import ResourceNotFound
+from src.core.services.errors import PermissionDenied, ResourceNotFound
 from src.infrastructure.di.inject import inject
 
 
@@ -32,7 +32,7 @@ class ChatController:
         @router.post("/stream", summary="Stream a persisted local-model response",
                      response_class=StreamingResponse,
                      responses={
-                         200: {"description": "SSE: message_start, delta*, message_end; errors via error event",
+                         200: {"description": "SSE: message_start, sources?, delta*, message_end; errors via error event",
                                "content": {"text/event-stream": {"schema": {"type": "string"}}}},
                          401: {"description": "Untrusted identity"},
                          403: {"description": "Untrusted audience claim"},
@@ -48,8 +48,13 @@ class ChatController:
             try:
                 conversation_id, message_id = await self._chat_service.start_async(
                     payload.message, principal,
-                    str(payload.conversation_id) if payload.conversation_id else None
+                    str(payload.conversation_id) if payload.conversation_id else None,
+                    payload.scenario,
                 )
+            except PermissionDenied:
+                return api_error("FORBIDDEN", "Scenario is not permitted.", 403, request_id)
+            except ValueError:
+                return api_error("INVALID_SCENARIO", "Unsupported scenario.", 422, request_id)
             except ResourceNotFound:
                 return api_error("NOT_FOUND", "Conversation not found.", 404, request_id)
             except Exception:
@@ -57,7 +62,8 @@ class ChatController:
 
             async def stream_events_async():
                 iterator = self._chat_service.stream_async(
-                    payload.message, request_id, UUID(message_id), UUID(conversation_id), principal
+                    payload.message, request_id, UUID(message_id), UUID(conversation_id), principal,
+                    payload.scenario,
                 )
                 try:
                     async for event in iterator:

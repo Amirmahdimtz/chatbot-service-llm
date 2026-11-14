@@ -193,6 +193,8 @@ class KnowledgeIndexService:
     async def retrieve_async(self, identity: ChatIdentity, query: str) -> list[dict]:
         if identity.audience not in {"public", "internal"}:
             raise PermissionDenied("Invalid identity audience")
+        if identity.audience == "internal" and (not identity.tenant_id or "knowledge:read_internal" not in identity.permissions):
+            raise PermissionDenied("Internal retrieval requires tenant and explicit permission")
         if not isinstance(query, str) or not query.strip() or len(query) > 2048:
             raise ValueError("Invalid query")
         embedding = (await self._embedding.embed_async([query]))[0]

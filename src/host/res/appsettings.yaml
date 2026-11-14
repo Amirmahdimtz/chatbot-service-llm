@@ -45,6 +45,11 @@ llm:
   max_tokens: 256
   enable_thinking: false
   max_output_chars: 8192
+  history_token_budget: 256
   max_concurrent_requests: 1
 auth:
   dev_enabled: false
+
+rag:
+  context_token_budget: 512
+  max_sources: 3

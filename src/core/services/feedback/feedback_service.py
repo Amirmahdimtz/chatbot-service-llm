@@ -1,7 +1,7 @@
 """Feedback semantics and ownership checks are enforced at the repository boundary."""
 from __future__ import annotations
 
-from src.core.services.chat.chat_identity_service import ChatIdentity
+from src.core.services.chat.chat_identity_service import ChatIdentity, scoped_conversation_owner
 from src.infrastructure.di.inject import inject
 from src.infrastructure.models.feedback import Feedback
 from src.infrastructure.repositories.feedback.feedback_repository import FeedbackRepository
@@ -16,5 +16,5 @@ class FeedbackService:
         self, message_id: str, identity: ChatIdentity, kind: str, comment: str | None
     ) -> Feedback:
         return await self._feedback.create_scoped_async(
-            message_id, identity.subject, identity.audience, kind, comment
+            message_id, scoped_conversation_owner(identity), identity.audience, kind, comment
         )

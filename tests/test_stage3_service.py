@@ -90,7 +90,7 @@ async def test_output_limit_never_completes_a_partial_response():
 @pytest.mark.asyncio
 async def test_close_after_delta_marks_cancelled_and_preserves_partial_text():
     conversations = ConversationStub()
-    stream = ChatService(StreamProvider(["سلام", " دنیا"]), Config(), conversations).stream_async(
+    stream = ChatService(StreamProvider(["سلام", " دنیا"]), Config(), conversations, ScenarioRouterService(), None).stream_async(
         "سلام", uuid4(), uuid4(), uuid4(), IDENTITY
     )
     assert (await anext(stream)).name == "message_start"
@@ -108,7 +108,7 @@ async def test_cancel_scope_does_not_interrupt_terminal_db_cleanup():
             return await super().finalize_async(message_id, identity, status, content)
 
     conversations = SlowConversationStub()
-    stream = ChatService(StreamProvider(["سلام", " دنیا"]), Config(), conversations).stream_async(
+    stream = ChatService(StreamProvider(["سلام", " دنیا"]), Config(), conversations, ScenarioRouterService(), None).stream_async(
         "سلام", uuid4(), uuid4(), uuid4(), IDENTITY
     )
     async with anyio.create_task_group() as group:

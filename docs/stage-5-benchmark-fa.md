@@ -176,6 +176,92 @@ if ($LASTEXITCODE -ne 0) { throw "Stage 5 probe failed" }
 
 The `lengths` array reports each candidate independently; `total_characters` counts all five, and `baseline_rerank_ms` is the actual local model call time. No speedup is claimed from character counts alone. A later **opt-in** test with `--max-characters 120` executes baseline and prefix-only reranking against the **same authorized candidate set in one retrieval**. It does not alter the service's returned baseline results or original citation text. The `comparison` includes both time measurements and document order only when the full original candidate-to-document mapping is unambiguous (all candidates returned, distinct full texts). A short prefix may omit relevant evidence; do **not** deploy truncation based on one question or these ten synthetic documents. Compare all 20 questions and repeated runs before considering a service change. Never execute this probe with real organizational text or credentials.
 
+## Stage 5 A/B order and tail-evidence challenge (read-only)
+
+**Purpose:** verify (1) that the measured reranker speedup is not solely an artifact of running the original text first, and (2) that a fixed 120-character prefix can hide relevant evidence in longer fictional documents. Neither experiment changes `KnowledgeIndexService`, source text, Qdrant collections, PostgreSQL rows, citation payloads or runtime settings. This evaluation is **not** a production readiness gate or a benchmark of answer generation.
+
+The CLI `src/infrastructure/scripts/benchmark_stage5_rerank_ab_fa.py` runs **inside the existing isolated development app container**. It supports:
+
+- `--mode tail`: five fully synthetic documents (each longer than 500 characters) with an identical introductory prefix and distinct relevant facts **only after** the first 120 characters. Five queries target each distinct suffix. Sends the documents directly to the real local `RerankingProvider`. No SQL, Qdrant or embedding retrieval is performed in this mode. Scores are **reranker-only Top-1 and MRR@5**, not full-retrieval Recall. HitRate@5 is reported but is trivially 1.0 whenever the known target is among these five candidates, so do not interpret it as a sensitive quality metric.
+- `--mode corpus`: twenty previously recorded synthetic queries with expected UUIDs; runs the **real authorized public retrieval**, captures the same five authorized candidates after RRF/SQL validation, and reranks the originals and prefixes for each query. This evaluates the effect of reranking input length on the **already retrieved** candidate set. No new ingestion, no query text or document body printed to output. Fails closed when fewer/more than five candidates are available or candidate/document mapping is ambiguous.
+- `--order prefix-first` reverses the earlier `baseline-first` A/B sequence; `--order alternating` uses ten `prefix-first` and ten `baseline-first` pairs across the 20-question corpus (3/2 for five tail cases). Both modes always label the timing based on the text sent, regardless of order. The existing one-query Probe keeps `baseline-first` by default.
+- JSON stdout contains `metrics` (timing, document ranks, Top-1 and MRR) and case metadata without raw text. Diagnostic progress is sent to stderr. The harness requires a valid **development-only synthetic public identity** and does not call any write endpoint.
+
+### Exact Windows PowerShell execution (reuse existing isolated corpus)
+
+Do **not** remove or reset existing volumes, document storage or model checkpoints. Verify reranker `--threads 4 --threads-batch 4` is active, and no other benchmark is running. Commands assume `D:\chatbot-service-llm`, the previous `fa20261114125025-cap5.json` and the existing `stage5-fa-benchmark` Compose project.
+
+```powershell
+Set-Location "D:\chatbot-service-llm"
+if (git status --porcelain) { throw "Review local changes before pull" }
+git pull --ff-only origin main
+if ($LASTEXITCODE -ne 0) { throw "Git pull failed" }
+$Python = ".\.venv\Scripts\python.exe"
+& $Python -m pytest -q tests/test_stage5_reranker_probe.py tests/test_stage5_rerank_ab.py
+if ($LASTEXITCODE -ne 0) { throw "Stage 5 A/B tests failed" }
+
+$env:CHATBOT_APP_PORT = "18010"
+$env:POSTGRES_HOST_PORT = "15442"
+$env:QDRANT_HOST_PORT = "16343"
+$env:CHATBOT_STORAGE_HOST_PATH = "D:\chatbot-stage5-fa-storage"
+$env:CHATBOT_PIP_INDEX_URL = "https://mirror-pypi.runflare.com/simple/"
+$env:CHATBOT_RERANK_CANDIDATES = "5"
+docker compose --project-name stage5-fa-benchmark config --quiet
+if ($LASTEXITCODE -ne 0) { throw "Invalid isolated Compose configuration" }
+docker compose --project-name stage5-fa-benchmark up -d --build --no-deps --force-recreate --wait app
+if ($LASTEXITCODE -ne 0) { throw "Isolated app build failed" }
+curl.exe --fail --silent --show-error http://127.0.0.1:8081/health
+if ($LASTEXITCODE -ne 0) { throw "Embedding model not ready" }
+curl.exe --fail --silent --show-error http://127.0.0.1:8082/health
+if ($LASTEXITCODE -ne 0) { throw "Reranker not ready" }
+```
+
+Tail-only negative control (five fictional documents, *no persistent writes*):
+
+```powershell
+$TailRaw = & docker compose --project-name stage5-fa-benchmark exec -T app `
+    python -m src.infrastructure.scripts.benchmark_stage5_rerank_ab_fa `
+    --mode tail --order alternating --max-characters 120
+if ($LASTEXITCODE -ne 0) { throw "Tail benchmark failed" }
+$Tail = ($TailRaw -join "`n") | ConvertFrom-Json
+$Tail | ConvertTo-Json -Depth 10 | Out-File -Encoding UTF8 -NoClobber "benchmarks/results/fa20261114125025-tail-ab.json"
+$Tail.metrics | Format-List
+```
+
+Reverse-order evaluation of the **same** existing 20 questions. The payload contains **base64 encoded synthetic questions**, UUIDs and report metadata only; not API keys, source documents or credentials. PowerShell 5.1's default native-command pipeline encoding is safe because this compact JSON is ASCII-only.
+
+```powershell
+$Original = Get-Content "benchmarks/results/fa20261114125025-cap5.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+if ($Original.run_id -ne "fa20261114125025" -or $Original.document_count -ne 10 -or
+    $Original.query_count -ne 20 -or $Original.shared_corpus_warning) {
+    throw "Unexpected isolated fixture report"
+}
+$Cases = @($Original.questions | ForEach-Object {
+    @{
+        query_base64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$_.question))
+        expected_document_id = [string]$_.expected_document_id
+    }
+})
+$Payload = @{
+    run_id = [string]$Original.run_id
+    document_count = [int]$Original.document_count
+    query_count = [int]$Original.query_count
+    shared_corpus_warning = [bool]$Original.shared_corpus_warning
+    cases = $Cases
+} | ConvertTo-Json -Depth 6 -Compress
+$CorpusRaw = $Payload | & docker compose --project-name stage5-fa-benchmark exec -T app `
+    python -m src.infrastructure.scripts.benchmark_stage5_rerank_ab_fa `
+    --mode corpus --order prefix-first --max-characters 120
+if ($LASTEXITCODE -ne 0) { throw "Reverse-order corpus benchmark failed" }
+$Corpus = ($CorpusRaw -join "`n") | ConvertFrom-Json
+$Corpus | ConvertTo-Json -Depth 10 | Out-File -Encoding UTF8 -NoClobber "benchmarks/results/fa20261114125025-reverse-ab.json"
+$Corpus.metrics | Format-List
+```
+
+Prior **baseline-first** reranker-only 20-question mean timings (from Windows 2026-11-14): originals 32,344.17 ms and prefix 24,439.09 ms, MRR@5 1.0 for both and zero Top-1 changes. Compare these with the new **prefix-first** summary and the tail negative control. Since the model and CPU workload fluctuate, a speedup in one order is not definitive. A tail-case MRR drop means fixed prefix truncation is unsafe even if the short corpus quality remains perfect.
+
+`benchmarks/results/` is git-ignored; output paths above are new. Do not overwrite existing reports. The commands print progression to stderr; avoid concurrent model requests and do not run with actual organizational data. Send both **metrics** objects and per-case baseline/prefix ranks (not secrets or paths). No additional migrations/endpoints are required.
+
 ## Checks and interpretation
 
 ```powershell

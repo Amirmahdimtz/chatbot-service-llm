@@ -66,8 +66,15 @@ def relevant_rank(document_ids: list[str] | None, expected_id: str | None) -> in
     return document_ids.index(expected_id) + 1 if expected_id in document_ids else None
 
 
-async def probe_retrieve_async(service, identity, query: str, max_characters: int | None) -> dict:
+async def probe_retrieve_async(
+    service, identity, query: str, max_characters: int | None,
+    comparison_order: str = "baseline-first",
+) -> dict:
     """Instrument only this process's injected provider; return baseline hits."""
+    if comparison_order not in {"baseline-first", "prefix-first"}:
+        raise ValueError("Invalid reranking comparison order")
+    if comparison_order == "prefix-first" and max_characters is None:
+        raise ValueError("Prefix-first requires max_characters")
     provider = service._reranking
     original = provider.rerank_async
     captured: dict = {}
@@ -78,16 +85,24 @@ async def probe_retrieve_async(service, identity, query: str, max_characters: in
         originals = list(texts)
         captured["lengths"] = candidate_lengths(originals, max_characters)
         captured["total_characters"] = sum(len(text) for text in originals)
-        started = time.perf_counter()
-        baseline = await original(user_query, originals)
-        captured["baseline_ms"] = round((time.perf_counter() - started) * 1000, 2)
+        async def timed_rerank(candidate_texts: list[str]) -> tuple[list[tuple[int, float]], float]:
+            started = time.perf_counter()
+            ranking = await original(user_query, candidate_texts)
+            elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+            return ranking, elapsed_ms
+
+        if max_characters is not None and comparison_order == "prefix-first":
+            shortened = [text[:max_characters] for text in originals]
+            reduced, captured["prefix_ms"] = await timed_rerank(shortened)
+            baseline, captured["baseline_ms"] = await timed_rerank(originals)
+        else:
+            baseline, captured["baseline_ms"] = await timed_rerank(originals)
+            if max_characters is not None:
+                shortened = [text[:max_characters] for text in originals]
+                reduced, captured["prefix_ms"] = await timed_rerank(shortened)
         captured["baseline_rankings"] = baseline
         captured["originals"] = originals
         if max_characters is not None:
-            shortened = [text[:max_characters] for text in originals]
-            started = time.perf_counter()
-            reduced = await original(user_query, shortened)
-            captured["prefix_ms"] = round((time.perf_counter() - started) * 1000, 2)
             captured["prefix_rankings"] = reduced
         return baseline
 
@@ -121,6 +136,7 @@ async def probe_retrieve_async(service, identity, query: str, max_characters: in
         "baseline_rerank_ms": captured["baseline_ms"],
         "comparison": None if max_characters is None else {
             "max_characters": max_characters,
+            "comparison_order": comparison_order,
             "prefix_rerank_ms": captured["prefix_ms"],
             "rank_comparison_supported": baseline_order is not None and prefix_order is not None,
             "baseline_document_order": baseline_order,
@@ -141,7 +157,10 @@ def parse_query_base64(encoded: str) -> str:
     return text
 
 
-async def main_async(query: str, max_characters: int | None, expected_id: str | None) -> dict:
+async def main_async(
+    query: str, max_characters: int | None, expected_id: str | None,
+    comparison_order: str = "baseline-first",
+) -> dict:
     if os.environ.get("ENV_TYPE", "production").lower() != "development":
         raise RuntimeError("Development mode required")
     token = os.environ.get("CHATBOT_DEV_API_TOKEN", "")
@@ -152,7 +171,9 @@ async def main_async(query: str, max_characters: int | None, expected_id: str | 
     if identity is None or identity.audience != "public":
         raise RuntimeError("Authorized synthetic public development identity required")
     service = resolve(KnowledgeIndexService)
-    report = await probe_retrieve_async(service, identity, query, max_characters)
+    report = await probe_retrieve_async(
+        service, identity, query, max_characters, comparison_order=comparison_order
+    )
     report["expected_document_rank_baseline"] = relevant_rank(
         report["baseline_document_order"], expected_id
     )
@@ -171,6 +192,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="Optional in-memory prefix-only A/B; 64..2048 characters")
     parser.add_argument("--expected-document-id", default=None,
                         help="Known relevant synthetic fixture UUID, if available")
+    parser.add_argument("--order", choices=("baseline-first", "prefix-first"),
+                        default="baseline-first", help="A/B invocation order; baseline-first by default")
     args = parser.parse_args(argv)
     try:
         query = parse_query_base64(args.query_base64)
@@ -178,7 +201,9 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("--max-characters must be in range 64..2048")
         if args.expected_document_id is not None:
             args.expected_document_id = str(UUID(args.expected_document_id))
-        report = asyncio.run(main_async(query, args.max_characters, args.expected_document_id))
+        report = asyncio.run(main_async(
+            query, args.max_characters, args.expected_document_id, comparison_order=args.order
+        ))
         print(json.dumps(report, ensure_ascii=False, indent=2), flush=True)
         return 0
     except (RuntimeError, ValueError) as exc:

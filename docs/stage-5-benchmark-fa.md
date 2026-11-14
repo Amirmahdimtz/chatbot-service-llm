@@ -262,6 +262,20 @@ Prior **baseline-first** reranker-only 20-question mean timings (from Windows 20
 
 `benchmarks/results/` is git-ignored; output paths above are new. Do not overwrite existing reports. The commands print progression to stderr; avoid concurrent model requests and do not run with actual organizational data. Send both **metrics** objects and per-case baseline/prefix ranks (not secrets or paths). No additional migrations/endpoints are required.
 
+## Stage 5 Windows evidence — 2026-11-14: fixed 120-character prefix rejected
+
+Actual local Windows 11 / i7-6700 CPU-only observations (the user supplied PowerShell logs). The isolated environment used `stage5-fa-benchmark`, `CHATBOT_RERANK_CANDIDATES=5` and a local `BGE-reranker-v2-m3` llama.cpp server. Both model health endpoints were OK; the app rebuilt healthy; **15 targeted tests passed locally** and the prior GitHub CI for the harness also succeeded. Reports are local, ignored under `benchmarks/results/` and were not committed.
+
+| Read-only reranker A/B | Full text MRR@5 | Prefix MRR@5 | Correct Top-1 (full / prefix) | Mean full rerank | Mean prefix rerank | Reduction |
+|---|---:|---:|---:|---:|---:|---:|
+| 20 previously indexed synthetic questions, **baseline-first**, earlier run | 1.000 | 1.000 | 20/20 / 20/20 | 32,344.17 ms | 24,439.09 ms | 24.44% |
+| Same 20 questions, **prefix-first**, independently repeated | 1.000 | 1.000 | 20/20 / 20/20 | 40,836.20 ms | 30,251.90 ms | 25.92% |
+| Five synthetic **tail-evidence** cases, **alternating order** (3 prefix-first, 2 baseline-first) | 1.000 | **0.456667** | **5/5 / 1/5** | 57,277.91 ms | 27,326.38 ms | 52.29% |
+
+The tail test was deliberately constructed with identical first-120-character introductions and a distinguishing answer in each suffix. After prefix truncation, four of five expected documents moved out of rank 1 (prefix ranks **1, 2, 3, 4, 5**). Its HitRate@5 remained 1.0 by construction: all five documents were supplied as candidates, so that metric **does not** demonstrate semantic quality. These scores are **reranker-only** over fixed candidates, not end-to-end search Recall or generated-answer quality. Across the 20-query corpus, reversing the invocation order did not remove the observed speedup, but CPU timings varied between runs. No production latency SLA can be inferred.
+
+**Decision:** do **not** add an unconditional `text[:120]` or other fixed-prefix truncation to `KnowledgeIndexService`, `RerankingProvider` or indexing. It demonstrably discards relevant evidence and silently compromises reranking even when a short synthetic corpus appears perfect. Continue preserving the **entire authorized original chunk** for citations and persistence. Any future candidate-length optimization must be separately designed and tested as a **query-aware, evidence-preserving selection/window** with long-document and adversarial regression cases, explicit fallback to original text and end-to-end quality/latency measurement. This is a direction for further investigation, **not** an implemented feature or validated performance improvement. The original cap of five reranking candidates remains an isolated, opt-in setting; default behavior is unchanged.
+
 ## Checks and interpretation
 
 ```powershell

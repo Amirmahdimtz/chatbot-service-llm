@@ -138,6 +138,44 @@ $Candidate5.metrics | Format-List
 
 Compare both results on the **same run and corpus**, including `recall_at_5`, `mrr_at_5`, `citation_issues_at_5`, `mean_latency_ms`, `p95_latency_ms` and `shared_corpus_warning`. If quality regresses, restore `$env:CHATBOT_RERANK_CANDIDATES = "20"` and recreate **only** the isolated app with the same `up -d --no-deps --force-recreate --wait app` command. Do not deploy the candidate cap on the main app until results are reviewed. The 10-document sample remains small and cannot justify a general production SLA.
 
+## Stage 5 read-only candidate length probe (CPU)
+
+The `src/infrastructure/scripts/probe_stage5_reranking.py` diagnostic runs **inside the isolated development app container**, resolves the existing authorized `KnowledgeIndexService`, and observes **the real texts after RRF and PostgreSQL access validation**, immediately before reranking. It emits only candidate character lengths, an **approximate lexical-token count** (not llama.cpp tokenizer tokens), number of candidates, HTTP-provider reranking time and the known relevant fixture document rank. It never prints source texts or queries, writes documents, changes production configuration, or deletes data. The provider method is restored in a `finally` block in the short-lived diagnostic process.
+
+The baseline run below executes **one real retrieval** against the already indexed 10-document/20-question fixture. It does not call the shortened-input variation. First verify that local embedding (8081) and reranking (8082) are healthy and `threads-batch=4` is still active. This new script is shipped in the Docker `app` image, so rebuild **only that app** in the existing benchmark project with the original port/storage overrides and candidate cap of 5.
+
+```powershell
+Set-Location "D:\chatbot-service-llm"
+if (git status --porcelain) { throw "Review local changes before pull" }
+git pull --ff-only origin main
+if ($LASTEXITCODE -ne 0) { throw "Pull failed" }
+$Python = ".\.venv\Scripts\python.exe"
+& $Python -m pytest -q tests/test_stage5_reranker_probe.py
+if ($LASTEXITCODE -ne 0) { throw "Probe unit tests failed" }
+
+$env:CHATBOT_APP_PORT = "18010"
+$env:POSTGRES_HOST_PORT = "15442"
+$env:QDRANT_HOST_PORT = "16343"
+$env:CHATBOT_STORAGE_HOST_PATH = "D:\chatbot-stage5-fa-storage"
+$env:CHATBOT_PIP_INDEX_URL = "https://mirror-pypi.runflare.com/simple/"
+$env:CHATBOT_RERANK_CANDIDATES = "5"
+docker compose --project-name stage5-fa-benchmark config --quiet
+if ($LASTEXITCODE -ne 0) { throw "Invalid Compose config" }
+docker compose --project-name stage5-fa-benchmark up -d --build --no-deps --force-recreate --wait app
+if ($LASTEXITCODE -ne 0) { throw "Isolated app failed" }
+
+$Report = Get-Content "benchmarks/results/fa20261114125025-cap5.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+if ($Report.run_id -ne "fa20261114125025" -or $Report.query_count -ne 20 -or $Report.shared_corpus_warning) {
+    throw "Unexpected fixture report; do not probe a different corpus"
+}
+$Case = $Report.questions[0]
+$QueryB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$Case.question))
+docker compose --project-name stage5-fa-benchmark exec -T app python -m src.infrastructure.scripts.probe_stage5_reranking --query-base64 $QueryB64 --expected-document-id ([string]$Case.expected_document_id)
+if ($LASTEXITCODE -ne 0) { throw "Stage 5 probe failed" }
+```
+
+The `lengths` array reports each candidate independently; `total_characters` counts all five, and `baseline_rerank_ms` is the actual local model call time. No speedup is claimed from character counts alone. A later **opt-in** test with `--max-characters 120` executes baseline and prefix-only reranking against the **same authorized candidate set in one retrieval**. It does not alter the service's returned baseline results or original citation text. The `comparison` includes both time measurements and document order only when the full original candidate-to-document mapping is unambiguous (all candidates returned, distinct full texts). A short prefix may omit relevant evidence; do **not** deploy truncation based on one question or these ten synthetic documents. Compare all 20 questions and repeated runs before considering a service change. Never execute this probe with real organizational text or credentials.
+
 ## Checks and interpretation
 
 ```powershell

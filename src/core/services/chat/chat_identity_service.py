@@ -20,12 +20,12 @@ class ChatIdentity:
 
 def scoped_conversation_owner(identity: ChatIdentity) -> str:
     """Tenant-isolated conversation/feedback owner without changing public legacy IDs."""
-    if identity.audience != "internal":
+    if identity.audience == "public" and identity.tenant_id is None:
         return identity.subject
-    # Length-prefix encoding avoids ambiguous concatenation between tenant and subject.
+    # Length-prefix encoding avoids tenant/subject ambiguity and public/internal collisions.
     tenant = identity.tenant_id or ""
-    key = f"{len(tenant)}:{tenant}{len(identity.subject)}:{identity.subject}"
-    return "internal:" + str(uuid5(NAMESPACE_URL, key))
+    key = f"{identity.audience}:{len(tenant)}:{tenant}{len(identity.subject)}:{identity.subject}"
+    return "scoped:" + str(uuid5(NAMESPACE_URL, key))
 
 
 @inject

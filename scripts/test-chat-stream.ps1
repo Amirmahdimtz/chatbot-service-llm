@@ -8,7 +8,8 @@ param(
     [switch]$CancelAfterFirstDelta,
     [string]$ConversationId,
     [ValidateSet("general", "knowledge_qa")]
-    [string]$Scenario = "general"
+    [string]$Scenario = "general",
+    [string]$Question
 )
 
 Set-StrictMode -Version Latest
@@ -49,6 +50,9 @@ try {
     # Keep this script ASCII-only: Windows PowerShell 5.1 reads UTF-8 without BOM as ANSI.
     # JSON Unicode escapes reconstruct the Persian request after JSON decoding.
     $Body = '{"message":"\u0633\u0644\u0627\u0645\u060c \u0644\u0637\u0641\u0627\u064b \u062f\u0631 \u062f\u0648 \u062c\u0645\u0644\u0647 \u0628\u0647 \u0641\u0627\u0631\u0633\u06cc \u067e\u0627\u0633\u062e \u0628\u062f\u0647."}'
+    if ($Question) {
+        $Body = @{ message = $Question } | ConvertTo-Json -Compress
+    }
     if ($Scenario -eq "knowledge_qa") {
         $Body = $Body.Substring(0, $Body.Length - 1) + ',"scenario":"knowledge_qa"}'
     }

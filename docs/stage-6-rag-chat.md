@@ -84,7 +84,9 @@ $ReportPath = "benchmarks/results/stage6-$(Get-Date -Format yyyyMMddHHmmss).json
 & $Python -m src.infrastructure.scripts.benchmark_stage5_fa --base-url http://127.0.0.1:18020 --mode smoke --output $ReportPath --confirm-write
 if ($LASTEXITCODE -ne 0) { throw "Synthetic ingestion/retrieval failed" }
 & .\scripts\test-chat-stream.ps1 -ApiUrl http://127.0.0.1:18020/api/v1/chat/stream -Scenario general
-& .\scripts\test-chat-stream.ps1 -ApiUrl http://127.0.0.1:18020/api/v1/chat/stream -Scenario knowledge_qa
+$Fixture = Get-Content "benchmarks/stage5_fa_fixture.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+$Question = [string]$Fixture.documents[2].questions[0]
+& .\scripts\test-chat-stream.ps1 -ApiUrl http://127.0.0.1:18020/api/v1/chat/stream -Scenario knowledge_qa -Question $Question
 docker compose --project-name stage6-validation logs --tail 60 app
 ~~~
 

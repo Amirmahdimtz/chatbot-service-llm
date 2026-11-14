@@ -300,6 +300,10 @@ never share credentials or complete private proxy URLs.
 
 ---
 
+## Reproducible Persian benchmark
+
+A deterministic 10-document/20-question synthetic Persian evaluation harness is available at `src/infrastructure/scripts/benchmark_stage5_fa.py`, with fixture `benchmarks/stage5_fa_fixture.json`, unit/HTTP-contract tests and a Windows runbook at [Stage 5 Persian benchmark](stage-5-benchmark-fa.md). It measures document-level Recall@5, MRR@5, citation structure and end-to-end search latency. It writes only explicitly authorized synthetic public documents, never deletes data, and reports existing-corpus contamination. A successful harness execution is not a claim that Persian retrieval quality or production latency meets an SLA; real isolated Windows measurements remain pending.
+
 ## Testing and remaining acceptance evidence
 
 - Unit tests exercise six Python-native formats, invalid files, legacy

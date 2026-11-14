@@ -8,3 +8,4 @@ __pycache__/
 *.db
 storage/
 *.egg-info/
+benchmarks/results/

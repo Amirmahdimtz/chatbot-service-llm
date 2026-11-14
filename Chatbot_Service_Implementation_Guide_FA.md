@@ -721,6 +721,8 @@ storage:
 7. Scenario Acceptance: همه ۷ زیرفرآیند جدول داده آزمایشی باید End-to-End قابل اجرا باشند.
 8. Performance/Resource: TTFT، token/s، Latency بازیابی، حافظه Peak، Load در concurrency=1 و رفتار در فشار منابع.
 
+**ارزیابی مرحله ۵:** اجرای Benchmark ساختگی فارسی با ۱۰ سند و ۲۰ پرسش، محاسبه `Recall@5` و `MRR@5` و Latency/Citation روی API واقعی. اجرای `smoke` با ۳ سند و ۶ پرسش؛ نتایج مشترک غیرایزوله باید با هشدار ثبت شوند. معیار عددی پذیرش نهایی صرفاً پس از اندازه‌گیری واقعی و توافق تعیین می‌شود.
+
 ### ۱۵.۲. مشاهده‌پذیری
 
 - Correlation/Request ID برای پیام‌ها، رویدادها و خطاها.
@@ -845,6 +847,8 @@ storage:
 
 | 2026-11-11 | Stage 5 Debian APT connectivity | تنظیم پیش‌فرض HTTPS برای مخازن Debian، محدودسازی Retry/Timeout و افزودن امکان انتخاب Mirror معتبر بدون دورزدن امضای APT؛ برای اختلال شبکه Docker Desktop | اصلاح راه‌اندازی؛ تأیید Windows باز |
 
+| 2026-11-14 | Stage 5 Persian benchmark | اسکریپت مستقل و قابل تکرار برای داده فارسی ساختگی، API واقعی Public، `Recall@5`، `MRR@5`، Citation Structure و Latency؛ بدون حذف داده یا ورود به مرحله ۶ | پیاده‌سازی Harness؛ ارزیابی واقعی Windows باز |
+
 | 2026-11-11 | Stage 5 Debian APT strict update | فعال‌سازی `APT::Update::Error-Mode=any` برای شکست قطعی Build در دانلود ناقص ایندکس؛ رد Mirror دارای خطای TLS؛ راهنمای تست بدون خطای Quoting در PowerShell | اصلاح CI؛ تأیید شبکه Windows باز |
 
 ---
@@ -872,6 +876,7 @@ LLM، Embedding و Reranking محلی، Runtime اصلی llama.cpp، Vector DB �
 | نسخه | تاریخ | تغییر |
 |---|---|---|
 | `1.0.0` | `2026-11-10` | تدوین سند جامع از تصمیم‌های توافق‌شده درباره هسته چت‌بات، پنج سناریو، Agent داخلی، یک Deployment، LLM محلی، Qdrant، RAG، SSE، Storage، تست و سخت‌افزار محلی. |
+| `1.2.3` | `2026-11-14` | افزودن قرارداد Benchmark خودکار فارسی مرحله ۵ با ۱۰ سند/۲۰ پرسش و مسیر اجرای ایزوله؛ نتایج کیفیت و Performance محلی همچنان بازند. |
 | `1.2.2` | `2026-11-11` | توقف Build هنگام خطای دریافت APT Index و اصلاح دستور تشخیصی PowerShell؛ عدم پذیرش Mirror با خطای TLS. |
 | `1.2.1` | `2026-11-11` | اصلاح Download وابستگی‌های Stage 5 در Dockerfile: Debian HTTPS، Retry/Timeout و Mirror اختیاری؛ مستندات تشخیص مشکل شبکه Docker Desktop. |
 | `1.2.0` | `2026-11-11` | ثبت قرارداد اجرایی مرحله ۵ درباره Parser/OCR، Storage، Embedding، Qdrant Hybrid+RRF، Reranking، Retrieval Access، Version/Retry و محدودیت Benchmark محلی. |

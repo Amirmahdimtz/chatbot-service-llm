@@ -131,7 +131,7 @@ def test_internal_tenant_permission_and_idor_are_enforced_before_persisting(app,
         denied = client.post("/api/v1/chat/stream",
             json={"message": "اطلاعات خصوصی", "scenario": "knowledge_qa"}, headers=HEADERS)
         assert denied.status_code == 403
-        assert client.get("/api/v1/conversation/", headers=HEADERS).json()["items"] == []
+        assert client.get("/api/v1/conversation/", headers=HEADERS).status_code == 403
     monkeypatch.setattr(ChatIdentityService, "authenticate",
                         lambda self, auth: ChatIdentity("staff", "internal", frozenset({"knowledge:read_internal"}), None))
     with TestClient(app) as client:

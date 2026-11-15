@@ -1,0 +1,456 @@
+{
+  "schema_version": 1,
+  "dataset_id": "stage9-persian-synthetic-v1",
+  "tenant_id": "stage9-synthetic",
+  "description": "Entirely fictional and repeatable; never import into operational databases.",
+  "records": [
+    {
+      "kind": "faq",
+      "key": "faq_prayer_training",
+      "audience": "public",
+      "payload": {
+        "question": "در نمونه آموزشی، روش ثبت پرسش چیست؟",
+        "answer": "پرسش در فرم آموزشی ثبت و با منبع تأییدشده بررسی می‌شود.",
+        "aliases": [
+          "روش ثبت پرسش آموزشی چیست؟"
+        ],
+        "source_reference": "synthetic-manual-01",
+        "source_title": "راهنمای فرضی پرسش",
+        "expert_reference": "synthetic-reviewer-01"
+      }
+    },
+    {
+      "kind": "faq",
+      "key": "faq_unrelated_training",
+      "audience": "public",
+      "payload": {
+        "question": "زمان‌بندی جلسه ساختگی چیست؟",
+        "answer": "برنامه ساختگی در تابلوی آموزشی نمایش داده می‌شود.",
+        "aliases": [],
+        "source_reference": "synthetic-calendar-01",
+        "source_title": "تقویم فرضی",
+        "expert_reference": "synthetic-reviewer-02"
+      }
+    },
+    {
+      "kind": "personnel",
+      "key": "alice",
+      "payload": {
+        "skills": {
+          "python": 4,
+          "sql": 4,
+          "writing": 3
+        },
+        "years_experience": 5,
+        "unit_id": "u_source",
+        "position_id": "junior",
+        "available": true,
+        "transfer_allowed": true,
+        "goals": [
+          "Senior Python"
+        ]
+      }
+    },
+    {
+      "kind": "personnel",
+      "key": "bob",
+      "payload": {
+        "skills": {
+          "python": 4
+        },
+        "years_experience": 2,
+        "unit_id": "u_source",
+        "position_id": "junior",
+        "available": true,
+        "transfer_allowed": false
+      }
+    },
+    {
+      "kind": "personnel",
+      "key": "carol",
+      "payload": {
+        "skills": {
+          "python": 5,
+          "sql": 4
+        },
+        "years_experience": 6,
+        "unit_id": "u_source",
+        "position_id": "junior",
+        "available": false,
+        "transfer_allowed": false,
+        "blocked_units": [
+          "u_target"
+        ]
+      }
+    },
+    {
+      "kind": "personnel",
+      "key": "dana",
+      "payload": {
+        "skills": {
+          "python": 5,
+          "sql": 4
+        },
+        "years_experience": 6,
+        "unit_id": "u_source",
+        "position_id": "junior",
+        "available": true,
+        "transfer_allowed": false
+      }
+    },
+    {
+      "kind": "position",
+      "key": "junior",
+      "payload": {
+        "title": "Junior synthetic role",
+        "unit_id": "u_source",
+        "open_slots": 0
+      }
+    },
+    {
+      "kind": "position",
+      "key": "senior",
+      "payload": {
+        "title": "Senior Python",
+        "unit_id": "u_target",
+        "required_skills": {
+          "python": 4,
+          "sql": 3
+        },
+        "preferred_skills": {
+          "writing": 2
+        },
+        "min_experience_years": 3,
+        "open_slots": 2
+      }
+    },
+    {
+      "kind": "position",
+      "key": "expert",
+      "payload": {
+        "title": "Expert Python",
+        "unit_id": "u_full",
+        "required_skills": {
+          "python": 5,
+          "sql": 5
+        },
+        "min_experience_years": 5,
+        "open_slots": 1
+      }
+    },
+    {
+      "kind": "unit",
+      "key": "u_source",
+      "payload": {
+        "name": "Synthetic source",
+        "skills": [
+          "python"
+        ],
+        "headcount_limit": 8,
+        "current_headcount": 4,
+        "capacity_hours": 10,
+        "committed_hours": 8
+      }
+    },
+    {
+      "kind": "unit",
+      "key": "u_target",
+      "payload": {
+        "name": "Synthetic target",
+        "skills": [
+          "python",
+          "sql"
+        ],
+        "headcount_limit": 3,
+        "current_headcount": 1,
+        "capacity_hours": 12,
+        "committed_hours": 2
+      }
+    },
+    {
+      "kind": "unit",
+      "key": "u_full",
+      "payload": {
+        "name": "Synthetic full unit",
+        "skills": [
+          "python",
+          "sql"
+        ],
+        "headcount_limit": 1,
+        "current_headcount": 1,
+        "capacity_hours": 4,
+        "committed_hours": 4
+      }
+    },
+    {
+      "kind": "research",
+      "key": "case_pipeline",
+      "payload": {
+        "title": "Synthetic pipeline pilot",
+        "problem": "python pipeline latency",
+        "context_tags": [
+          "python",
+          "pipeline"
+        ],
+        "solution": "Evaluate incremental batches under a controlled load",
+        "benefits": [
+          "Potential lower latency"
+        ],
+        "risks": [
+          "Retry overhead"
+        ],
+        "assumptions": [
+          "Stable load"
+        ],
+        "evaluation_metrics": [
+          "p95 latency"
+        ],
+        "source_reference": "synthetic-study-01"
+      }
+    },
+    {
+      "kind": "research",
+      "key": "case_hr",
+      "payload": {
+        "title": "Synthetic office memo",
+        "problem": "employee onboarding timetable",
+        "context_tags": [
+          "onboarding"
+        ],
+        "solution": "Trial a checklist",
+        "benefits": [
+          "Repeatable onboarding"
+        ],
+        "risks": [
+          "Stale checklist"
+        ],
+        "assumptions": [
+          "Reviewer available"
+        ],
+        "evaluation_metrics": [
+          "time to onboard"
+        ],
+        "source_reference": "synthetic-study-02"
+      }
+    },
+    {
+      "kind": "task_plan",
+      "key": "plan_valid",
+      "payload": {
+        "objective": "Synthetic rollout workflow",
+        "tasks": [
+          {
+            "task_id": "prepare",
+            "hours": 4,
+            "required_skills": [
+              "python"
+            ]
+          },
+          {
+            "task_id": "deploy",
+            "hours": 6,
+            "required_skills": [
+              "sql"
+            ],
+            "depends_on": [
+              "prepare"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "task_plan",
+      "key": "plan_cycle",
+      "payload": {
+        "objective": "Synthetic dependency cycle",
+        "tasks": [
+          {
+            "task_id": "a",
+            "hours": 1,
+            "depends_on": [
+              "b"
+            ]
+          },
+          {
+            "task_id": "b",
+            "hours": 1,
+            "depends_on": [
+              "a"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "task_plan",
+      "key": "plan_capacity",
+      "payload": {
+        "objective": "Synthetic insufficient unit capacity",
+        "tasks": [
+          {
+            "task_id": "oversized",
+            "hours": 1000,
+            "required_skills": [
+              "python"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "cases": [
+    {
+      "scenario": "religious_qa",
+      "name": "approved_alias",
+      "message": "روش ثبت پرسش آموزشی چیست؟",
+      "expected_response_type": "verified_faq",
+      "expected_source_reference": "synthetic-manual-01"
+    },
+    {
+      "scenario": "religious_qa",
+      "name": "no_evidence",
+      "message": "پرسش کاملاً بی ارتباط و فاقد منبع نمونه",
+      "expected_response_type": "insufficient_evidence"
+    },
+    {
+      "scenario": "personnel_matching",
+      "name": "ranked_hard_constraints",
+      "message": "ارزیابی افراد واجد شرایط",
+      "scenario_input": {
+        "position_id": "senior"
+      },
+      "expected_status": "completed",
+      "expected_ids": [
+        "alice",
+        "dana"
+      ],
+      "excluded_ids": [
+        "bob",
+        "carol"
+      ]
+    },
+    {
+      "scenario": "personnel_matching",
+      "name": "missing_position",
+      "message": "سمت ناموجود",
+      "scenario_input": {
+        "position_id": "missing"
+      },
+      "expected_status": "insufficient_data",
+      "expected_ids": []
+    },
+    {
+      "scenario": "talent_discovery",
+      "name": "skill_gap",
+      "message": "شناسایی استعداد",
+      "scenario_input": {
+        "employee_id": "bob"
+      },
+      "expected_status": "completed",
+      "expected_ids": [
+        "senior",
+        "expert"
+      ]
+    },
+    {
+      "scenario": "internal_transfers",
+      "name": "capacity_and_policy",
+      "message": "پیشنهاد انتقال مجاز",
+      "scenario_input": {
+        "employee_id": "alice"
+      },
+      "expected_status": "completed",
+      "expected_ids": [
+        "senior"
+      ],
+      "excluded_ids": [
+        "expert"
+      ]
+    },
+    {
+      "scenario": "internal_transfers",
+      "name": "blocked_personnel",
+      "message": "ارزیابی انتقال فرد ممنوع",
+      "scenario_input": {
+        "employee_id": "bob"
+      },
+      "expected_status": "insufficient_data",
+      "expected_ids": []
+    },
+    {
+      "scenario": "research_advice",
+      "name": "sourced_case",
+      "message": "python pipeline",
+      "scenario_input": {
+        "context_tags": [
+          "pipeline"
+        ]
+      },
+      "expected_status": "completed",
+      "expected_ids": [
+        "case_pipeline"
+      ],
+      "excluded_ids": [
+        "case_hr"
+      ]
+    },
+    {
+      "scenario": "research_advice",
+      "name": "no_matching_evidence",
+      "message": "مسئله نامرتبط xyz",
+      "scenario_input": {
+        "context_tags": []
+      },
+      "expected_status": "insufficient_data",
+      "expected_ids": []
+    },
+    {
+      "scenario": "personal_development",
+      "name": "skill_development",
+      "message": "برنامه رشد مهارت",
+      "scenario_input": {
+        "employee_id": "bob",
+        "target_position_id": "senior",
+        "weeks": 8
+      },
+      "expected_status": "completed",
+      "expected_ids": [
+        "bob"
+      ]
+    },
+    {
+      "scenario": "task_allocation",
+      "name": "dependency_order",
+      "message": "تخصیص کار آموزشی",
+      "scenario_input": {
+        "plan_id": "plan_valid"
+      },
+      "expected_status": "completed",
+      "expected_ids": [
+        "prepare",
+        "deploy"
+      ]
+    },
+    {
+      "scenario": "task_allocation",
+      "name": "cycle_detected",
+      "message": "آزمون چرخه",
+      "scenario_input": {
+        "plan_id": "plan_cycle"
+      },
+      "expected_status": "conflict",
+      "expected_ids": []
+    },
+    {
+      "scenario": "task_allocation",
+      "name": "capacity_exhausted",
+      "message": "آزمون ظرفیت",
+      "scenario_input": {
+        "plan_id": "plan_capacity"
+      },
+      "expected_status": "conflict",
+      "expected_ids": []
+    }
+  ]
+}

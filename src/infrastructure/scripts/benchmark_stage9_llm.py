@@ -129,6 +129,7 @@ def collect_sample(client: httpx.Client, model_id: str, prompt: str, max_tokens:
     response_parts: list[str] = []
     saved_characters = 0
     completion_tokens = None
+    finish_reason = None
     done = False
     try:
         with client.stream("POST", "/v1/chat/completions", json=body,
@@ -159,7 +160,15 @@ def collect_sample(client: httpx.Client, model_id: str, prompt: str, max_tokens:
                     if not isinstance(choices, list):
                         raise ValueError("Invalid choices")
                     if choices:
-                        delta = choices[0]["delta"].get("content")
+                        choice = choices[0]
+                        if not isinstance(choice, dict):
+                            raise ValueError("Invalid choice")
+                        reason = choice.get("finish_reason")
+                        if reason is not None:
+                            if not isinstance(reason, str) or not reason:
+                                raise ValueError("Invalid finish reason")
+                            finish_reason = reason
+                        delta = choice["delta"].get("content")
                         if delta is not None and not isinstance(delta, str):
                             raise ValueError("Non-string delta")
                         if delta:
@@ -187,6 +196,7 @@ def collect_sample(client: httpx.Client, model_id: str, prompt: str, max_tokens:
         "output_characters": chars,
         "characters_per_second_proxy": round(chars / generation_seconds, 2),
         "completion_tokens": completion_tokens,
+        "finish_reason": finish_reason,
         **({"response_text": "".join(response_parts),
             "response_text_truncated": saved_characters < chars}
            if include_response_text else {}),
@@ -240,6 +250,10 @@ def build_report(client: httpx.Client, prompts: list[dict], digest: str, *,
                 # Return error categories only, never model output or server messages.
                 failures.append({"prompt_id": row["id"], "run": index + 1,
                                  "error": str(exc)})
+    stop_reasons = {}
+    for sample in results:
+        reason = sample.get("finish_reason") or "unknown"
+        stop_reasons[reason] = stop_reasons.get(reason, 0) + 1
     return {
         "report_version": 1,
         "measurement_type": "real_llama_cpp_streaming_not_mock",
@@ -264,8 +278,17 @@ def build_report(client: httpx.Client, prompts: list[dict], digest: str, *,
         "samples": results,
         "errors": failures,
         "aggregates": aggregate(results),
+        "aggregates_by_run_position": {
+            "first_run_per_prompt": aggregate([s for s in results if s["run"] == 1]),
+            "repeat_runs_per_prompt": aggregate([s for s in results if s["run"] > 1]),
+        },
+        "finish_reason_counts": stop_reasons,
         "limitations": [
             "TTFT includes local HTTP round-trip and server scheduling.",
+            "The global warmup primes only the first prompt; first-run and repeat-run "
+            "latencies must not be interpreted as controlled cold/warm cache benchmarks.",
+            "finish_reason is null if the server omits it; a token cap can prevent "
+            "a meaningful quality review even when requests finish successfully.",
             "Token throughput is null when server does not stream completion_tokens usage.",
             "Character throughput is a proxy, NOT generated tokens/sec.",
             ("Persian answer quality and citation correctness require human review; "

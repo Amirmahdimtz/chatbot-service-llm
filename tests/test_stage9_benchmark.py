@@ -173,3 +173,47 @@ def test_llm_listing_unauthorized_error_is_actionable_without_leaking_token():
         with pytest.raises(BenchmarkError, match="CHATBOT_LLM_API_KEY") as info:
             model_id_async_safe(client, "")
     assert "secret response" not in str(info.value)
+
+
+
+def test_finish_reason_and_first_vs_repeat_runs_are_reported():
+    prompts, digest = load_prompts()
+
+    def handler(request):
+        if request.url.path != "/v1/chat/completions":
+            return fake_transport(request)
+        payload = json.loads(request.content)
+        assert payload["max_tokens"] == 32
+        chunks = [
+            {"choices": [{"delta": {"content": "پاسخ تست"}, "finish_reason": None}]},
+            {"choices": [{"delta": {}, "finish_reason": "length"}]},
+            {"choices": [], "usage": {"completion_tokens": 32}},
+        ]
+        sse = "".join(
+            "data: " + json.dumps(row, ensure_ascii=False) + "\n\n" for row in chunks
+        ) + "data: [DONE]\n\n"
+        return httpx.Response(200, text=sse)
+
+    with httpx.Client(
+        base_url="http://127.0.0.1:8080",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        report = build_report(
+            client, prompts, digest, model_label="SYNTHETIC HTTP TEST",
+            runtime_version="test", quantization="test", runs=2, warmup=1,
+            max_tokens=32,
+        )
+    assert report["completed"] == 8
+    assert report["finish_reason_counts"] == {"length": 8}
+    assert all(sample["finish_reason"] == "length" for sample in report["samples"])
+    assert report["aggregates_by_run_position"]["first_run_per_prompt"]["ttft_ms"]["sample_count"] == 4
+    assert report["aggregates_by_run_position"]["repeat_runs_per_prompt"]["ttft_ms"]["sample_count"] == 4
+
+
+def test_stream_without_finish_reason_keeps_it_unknown():
+    with httpx.Client(
+        base_url="http://127.0.0.1:8080",
+        transport=httpx.MockTransport(fake_transport),
+    ) as client:
+        sample = collect_sample(client, "synthetic-test-model", "synthetic", 32)
+    assert sample["finish_reason"] is None

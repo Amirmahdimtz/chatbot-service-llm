@@ -1,6 +1,6 @@
 # مرحله ۹ — Gap Analysis، داده‌های مصنوعی، CI و Benchmark محلی
 
-**وضعیت:** partial — pending local benchmark and final acceptance. این سند نتیجه Mock/CI را با کیفیت واقعی مدل محلی یکی نمی‌داند.
+**وضعیت:** partial — اجرای RAG و Benchmark اولیه مدل 1.7B روی Windows تأیید شده است؛ داوری کیفیت پاسخ، تحلیل Cache/TTFT و اندازه‌گیری Resource Timeline همچنان باز است. نتیجه Mock/CI با کیفیت واقعی مدل محلی یکی نیست.
 
 ## وضعیت واقعی قبل از تغییر (HEAD مرحله ۸: f5573691)
 
@@ -175,3 +175,18 @@ GitHub Actions: `.github/workflows/tests.yml`، Python 3.11/3.12 + تمام تس
 5. در صورت نیاز، فقط خطاهای sanitised از `docker compose logs --tail 80 app`؛ هرگز `.env`، Authorization Header یا داده واقعی پرسنل را نفرستید.
 
 **Definition of Done:** تا اجرای Benchmark سخت‌افزار Windows، تأیید کیفیت فارسی/استناد واقعی، اعتبارسنجی کامل Security/E2E روی محیط محلی و موفقیت CI آخرین Commit، مرحله ۹ `completed` نیست. عملیات مستقل مرحله ۱۰ اجرا نشده است.
+
+
+## شواهد واقعی Windows مرحله ۹ — 2026-11-15
+
+شواهد زیر از خروجی PowerShell کاربر در Windows 11 / i7-6700 با مدل `D:\\models\\Qwen3-1.7B-Q4_K_M.gguf` آمده‌اند؛ خود CI این عملکرد را اندازه‌گیری نکرده است.
+
+- تست محلی ابزارهای مدل و Provider: `19 passed`؛ تمام تست‌های مخزن پیش‌تر `234 passed, 3 skipped` بودند و CI جدیدتر در Python 3.12 `244 passed, 3 skipped` ثبت کرده است.
+- API مدل در `127.0.0.1:8080` پس از ارسال کلید موجود در `.env` احراز هویت شد. هرگز کلید را در گزارش ثبت یا به Git ارسال نکنید.
+- Benchmark چهار Prompt فارسی در سه تکرار پس از یک Warmup: **12/12 موفق، 0 خطا**، TTFT p50 **232.32 ms** و p95 **21,261.41 ms**، کل زمان p50 **23,738.10 ms** و p95 **43,012.47 ms**، سرعت تولید بر مبنای usage واقعی p50 **5.58** و p95 **5.99** token/s.
+- اولین اجرای سه Prompt جدید `knowledge_uncertainty`، `research_tradeoffs` و `prompt_injection` هرکدام TTFT حدود 20.7 تا 21.3 ثانیه داشتند؛ اولین Prompt قبلاً در Warmup استفاده شده بود. این با هزینه پردازش اولیه ورودی/KV-cache سازگار است اما **اثبات علت نیست** و با `llama.cpp` timing، هم‌زمانی مدل‌های CPU و گزارش مصرف منابع باید بررسی شود.
+- Snapshot پردازش مدل `llama-server.exe` روی پورت 8080: RAM **1,349.9 MiB**، Peak Working Set از شروع پردازش **1,648.1 MiB**. `CPU = 2153.33` مقدار انباشته ثانیه CPU است، نه درصد مصرف لحظه‌ای. از این Snapshot نمی‌توان نبود فشار کلی حافظه یا CPU را اثبات کرد.
+- تمام پنج نمونه چاپ‌شده `completion_tokens=128` (سقف درخواست) بودند؛ بدون `finish_reason`، اتمام طبیعی متن قابل تأیید نیست. در نسخه اصلاح‌شده ابزار، `finish_reason`، شمار پایان‌ها و آمار `first_run_per_prompt` در برابر `repeat_runs_per_prompt` جداگانه به گزارش افزوده شد. گزارش قدیمی این داده را ندارد و نباید بر مبنای آن جواب را «کامل» دانست.
+- ارزیابی RAG واقعی روی Stack ایزوله Stage 5 (`127.0.0.1:18010`): Recall@5 **1.0**، MRR@5 **1.0**، Reference Answer Coverage@5 **1.0**، Citation Structure Issues **0**، Median Search Latency **41,307.06 ms**. این نتایج مربوط به **Retrieval** است، نه پاسخ تولیدی مدل.
+
+برای به‌دست‌آوردن `finish_reason` روی همان چهار Prompt و بررسی سقف خروجی، بدون دست‌کاری مدل یا Database می‌توان Benchmark را با `--max-tokens 256`، فایل خروجی جدید و `--include-responses` تکرار کرد. مقایسه زمان‌های اجرای متفاوت باید با درنظرگرفتن تفاوت سقف توکن و شرایط CPU انجام شود. متن پاسخ را پیش از ارسال بررسی کنید. نمونه‌برداری منابع با `scripts/monitor-stage9-llama.ps1` صرفاً خواندنی است؛ Snapshot نهایی جای آن را نمی‌گیرد. تا داوری کیفیت فارسی، استناد و Security/E2E با مدل واقعی انجام نشده، مرحله `completed` نیست.

@@ -86,7 +86,7 @@ def model_id_async_safe(client: httpx.Client, requested: str) -> str:
 
 
 def collect_sample(client: httpx.Client, model_id: str, prompt: str, max_tokens: int,
-                   include_usage: bool = True) -> dict:
+                   include_usage: bool = True, include_response_text: bool = False) -> dict:
     body = {
         "model": model_id, "stream": True, "temperature": 0,
         "max_tokens": max_tokens,
@@ -101,6 +101,8 @@ def collect_sample(client: httpx.Client, model_id: str, prompt: str, max_tokens:
     start = time.perf_counter()
     first = None
     chars = 0
+    response_parts: list[str] = []
+    saved_characters = 0
     completion_tokens = None
     done = False
     try:
@@ -139,6 +141,10 @@ def collect_sample(client: httpx.Client, model_id: str, prompt: str, max_tokens:
                             if first is None:
                                 first = time.perf_counter()
                             chars += len(delta)
+                            if include_response_text and saved_characters < 8192:
+                                fragment = delta[:8192 - saved_characters]
+                                response_parts.append(fragment)
+                                saved_characters += len(fragment)
                 except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
                     raise BenchmarkError("Malformed model SSE event") from exc
     except httpx.TimeoutException as exc:
@@ -156,6 +162,9 @@ def collect_sample(client: httpx.Client, model_id: str, prompt: str, max_tokens:
         "output_characters": chars,
         "characters_per_second_proxy": round(chars / generation_seconds, 2),
         "completion_tokens": completion_tokens,
+        **({"response_text": "".join(response_parts),
+            "response_text_truncated": saved_characters < chars}
+           if include_response_text else {}),
         "generated_tokens_per_second": (
             round(completion_tokens / generation_seconds, 2)
             if completion_tokens is not None else None
@@ -189,7 +198,8 @@ def aggregate(samples: list[dict]) -> dict:
 def build_report(client: httpx.Client, prompts: list[dict], digest: str, *,
                  model_label: str, runtime_version: str, quantization: str,
                  runs: int, warmup: int, max_tokens: int,
-                 include_usage: bool = True, model_id: str = "") -> dict:
+                 include_usage: bool = True, model_id: str = "",
+                 include_response_text: bool = False) -> dict:
     served_model = model_id_async_safe(client, model_id)
     for _ in range(warmup):
         collect_sample(client, served_model, prompts[0]["prompt"], max_tokens, include_usage)
@@ -199,7 +209,7 @@ def build_report(client: httpx.Client, prompts: list[dict], digest: str, *,
         for index in range(runs):
             try:
                 measurement = collect_sample(client, served_model, row["prompt"],
-                                             max_tokens, include_usage)
+                                             max_tokens, include_usage, include_response_text)
                 results.append({"prompt_id": row["id"], "run": index + 1, **measurement})
             except BenchmarkError as exc:
                 # Return error categories only, never model output or server messages.
@@ -223,6 +233,7 @@ def build_report(client: httpx.Client, prompts: list[dict], digest: str, *,
         "concurrency": 1,
         "max_tokens": max_tokens,
         "token_usage_requested": include_usage,
+        "response_text_recording_opt_in": include_response_text,
         "completed": len(results),
         "failed": len(failures),
         "samples": results,
@@ -232,7 +243,9 @@ def build_report(client: httpx.Client, prompts: list[dict], digest: str, *,
             "TTFT includes local HTTP round-trip and server scheduling.",
             "Token throughput is null when server does not stream completion_tokens usage.",
             "Character throughput is a proxy, NOT generated tokens/sec.",
-            "Persian answer quality and citation correctness require human review; text is not saved.",
+            ("Persian answer quality and citation correctness require human review; "
+             + ("text recorded by explicit opt-in and may require redaction before sharing."
+                if include_response_text else "text not saved.")),
             "Peak RAM, CPU usage, retrieval/rerank and agent latency are not measured by this script.",
             "Runtime flags and model quantization labels are user-declared, not programmatically verified.",
         ],
@@ -251,6 +264,8 @@ def main() -> int:
     parser.add_argument("--max-tokens", type=int, default=128)
     parser.add_argument("--timeout", type=float, default=180.0)
     parser.add_argument("--no-stream-usage", action="store_true")
+    parser.add_argument("--include-responses", action="store_true",
+                        help="Store bounded synthetic-prompt model answers for human quality review")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if not 1 <= args.runs <= 20 or not 1 <= args.warmup <= 3:
@@ -271,6 +286,7 @@ def main() -> int:
             runtime_version=args.runtime_version, quantization=args.quantization,
             runs=args.runs, warmup=args.warmup, max_tokens=args.max_tokens,
             include_usage=not args.no_stream_usage, model_id=args.model_id,
+            include_response_text=args.include_responses,
         )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     # Exclusive creation prevents accidental overwrite even with concurrent runs.

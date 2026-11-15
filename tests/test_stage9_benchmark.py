@@ -59,6 +59,21 @@ def test_real_stream_protocol_measures_usage_when_server_supplies_it():
     assert all(row["ttft_ms"] >= 0 and row["total_ms"] > 0 for row in report["samples"])
 
 
+def test_opt_in_synthetic_response_capture_has_strict_size_limit():
+    with httpx.Client(base_url="http://127.0.0.1:8080",
+                      transport=httpx.MockTransport(fake_transport)) as client:
+        captured = collect_sample(
+            client, "synthetic-test-model", "Synthetic fixed prompt", 32,
+            include_response_text=True,
+        )
+    assert captured["response_text"] == "پاسخ نمونه"
+    assert captured["response_text_truncated"] is False
+    with httpx.Client(base_url="http://127.0.0.1:8080",
+                      transport=httpx.MockTransport(fake_transport)) as client:
+        private = collect_sample(client, "synthetic-test-model", "Synthetic fixed prompt", 32)
+    assert "response_text" not in private
+
+
 def test_missing_server_usage_never_invents_token_throughput():
     def without_usage(request):
         result = fake_transport(request)

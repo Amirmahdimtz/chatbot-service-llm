@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "dataset_id": "stage9-rag-persian-support-v1",
+  "source_fixture": "stage5_fa_fixture.json",
+  "description": "Synthetic Persian reference answers are literal substrings of known source documents.",
+  "cases": [
+    {
+      "id": "religious-qa-1",
+      "question": "پرسش دینی بدون منبع تاییدشده به چه کسی ارجاع می‌شود؟",
+      "source_key": "religious-qa",
+      "reference_answer": "به کارشناس ارجاع شود"
+    },
+    {
+      "id": "religious-qa-2",
+      "question": "پاسخ پرسش دینی در سامانه روشنا باید چه شناسه ای داشته باشد؟",
+      "source_key": "religious-qa",
+      "reference_answer": "شناسه منبع تاییدشده"
+    },
+    {
+      "id": "hr-leave-1",
+      "question": "در شرکت فرضی آفتاب درخواست مرخصی سالانه با کدام فرم ثبت می‌شود؟",
+      "source_key": "hr-leave",
+      "reference_answer": "فرم آبی"
+    },
+    {
+      "id": "hr-leave-2",
+      "question": "درخواست مرخصی آفتاب چند روز کاری قبل از شروع باید فرستاده شود؟",
+      "source_key": "hr-leave",
+      "reference_answer": "دو روز کاری"
+    },
+    {
+      "id": "hr-onboarding-1",
+      "question": "کارمند جدید سازمان سپهر پیش از دریافت کارت دسترسی چه دوره ای می‌گذراند؟",
+      "source_key": "hr-onboarding",
+      "reference_answer": "دوره سه روزه ایمنی"
+    },
+    {
+      "id": "hr-onboarding-2",
+      "question": "کارت دسترسی موقت سازمان سپهر چه رنگی است؟",
+      "source_key": "hr-onboarding",
+      "reference_answer": "موقت سبز"
+    },
+    {
+      "id": "hr-assessment-1",
+      "question": "ارزیابی عملکرد در واحد نیلوفر هر چند وقت انجام می‌شود؟",
+      "source_key": "hr-assessment",
+      "reference_answer": "هر سه ماه یک بار"
+    },
+    {
+      "id": "hr-assessment-2",
+      "question": "دو شاخص ارزیابی عملکرد کارکنان نیلوفر چیست؟",
+      "source_key": "hr-assessment",
+      "reference_answer": "کیفیت پاسخ و تحویل به موقع"
+    },
+    {
+      "id": "research-proposal-1",
+      "question": "پیشنهاد پژوهشی مرکز دانا باید چه دو بخش اصلی داشته باشد؟",
+      "source_key": "research-proposal",
+      "reference_answer": "خلاصه مسئله و روش تحقیق"
+    },
+    {
+      "id": "research-proposal-2",
+      "question": "کمیته علمی مرکز دانا برای پذیرش اولیه چند روز کاری فرصت دارد؟",
+      "source_key": "research-proposal",
+      "reference_answer": "پنج روز کاری"
+    },
+    {
+      "id": "research-data-1",
+      "question": "برای دسترسی به داده ناشناس پروژه باران چه فرمی لازم است؟",
+      "source_key": "research-data",
+      "reference_answer": "فرم درخواست زرد"
+    },
+    {
+      "id": "research-data-2",
+      "question": "مسئول داده پروژه باران پیش از تحویل چه مواردی را بررسی می‌کند؟",
+      "source_key": "research-data",
+      "reference_answer": "هدف استفاده و سطح مجوز"
+    },
+    {
+      "id": "personal-learning-1",
+      "question": "در طرح فردا هر کارمند چند هدف یادگیری انتخاب می‌کند؟",
+      "source_key": "personal-learning",
+      "reference_answer": "دو هدف یادگیری شش ماهه"
+    },
+    {
+      "id": "personal-learning-2",
+      "question": "پیشرفت اهداف یادگیری طرح فردا در چه جلسه ای بررسی می‌شود؟",
+      "source_key": "personal-learning",
+      "reference_answer": "جلسه ماهانه"
+    },
+    {
+      "id": "personal-mentoring-1",
+      "question": "جلسه راهبری حرفه ای برنامه مهر هر چند هفته برگزار می‌شود؟",
+      "source_key": "personal-mentoring",
+      "reference_answer": "هر چهار هفته"
+    },
+    {
+      "id": "personal-mentoring-2",
+      "question": "نتیجه جلسه راهبری مهر در کدام دفترچه ثبت می‌شود؟",
+      "source_key": "personal-mentoring",
+      "reference_answer": "دفترچه پیشرفت بنفش"
+    },
+    {
+      "id": "task-assignment-1",
+      "question": "در سامانه هما هر وظیفه چند مسئول اصلی دارد؟",
+      "source_key": "task-assignment",
+      "reference_answer": "یک مسئول اصلی"
+    },
+    {
+      "id": "task-assignment-2",
+      "question": "اولویت وظایف سامانه هما چه سطح هایی دارد؟",
+      "source_key": "task-assignment",
+      "reference_answer": "کم، متوسط یا زیاد"
+    },
+    {
+      "id": "task-escalation-1",
+      "question": "در سامانه هما سرپرست برای معرفی جانشین چند روز کاری فرصت دارد؟",
+      "source_key": "task-escalation",
+      "reference_answer": "یک روز کاری"
+    },
+    {
+      "id": "task-escalation-2",
+      "question": "علت تغییر مسئول وظیفه در سامانه هما کجا ثبت می‌شود؟",
+      "source_key": "task-escalation",
+      "reference_answer": "تاریخچه همان وظیفه"
+    }
+  ],
+  "negative_controls": [
+    "در سندهای ساختگی، شماره حساب بانکی مدیر واقعی چیست؟",
+    "آیا در داده‌های ساختگی کد محرمانه سامانه واقعی ثبت شده است؟"
+  ]
+}

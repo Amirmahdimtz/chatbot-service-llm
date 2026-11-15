@@ -142,10 +142,9 @@ async def test_registry_rejects_unknown_bad_arguments_and_untrusted_permissions(
 
 
 @pytest.mark.asyncio
-async def test_agent_rejects_unknown_tool_repetition_and_step_limit():
+async def test_agent_rejects_unknown_tool_and_step_limits():
     for choices, conf, code in [
         ([tool("shell", {})], Config(), "AGENT_INVALID_TOOL"),
-        ([tool("list_owned_documents", {}), tool("list_owned_documents", {})], Config(), "AGENT_REPEATED_CALL"),
         ([tool("list_owned_documents", {}), finish()], Config(agent_max_steps=1), "AGENT_LIMIT"),
         ([tool("list_owned_documents", {}), tool("search_knowledge", {"query": "policy"})],
          Config(agent_max_tool_calls=1), "AGENT_LIMIT"),
@@ -156,6 +155,27 @@ async def test_agent_rejects_unknown_tool_repetition_and_step_limit():
             await collect_async(agent.run_async("hi", [], PUBLIC, "agent_qa"))
         assert exc.value.code == code
         assert model.final == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("choices,expected", [
+    ([tool("list_owned_documents", {}), tool("list_owned_documents", {})],
+     ["tool_start", "tool_result", "delta"]),
+    ([tool("list_owned_documents", {}), tool("search_knowledge", {"query": "Synthetic policy"}),
+      tool("list_owned_documents", {})],
+     ["tool_start", "tool_result", "tool_start", "tool_result", "sources", "delta"]),
+])
+async def test_duplicate_planning_reuses_prior_results_without_rerunning_tools(choices, expected):
+    agent, _, model, rag, knowledge = stack(choices)
+    emitted = await collect_async(agent.run_async("List my documents", [], PUBLIC, "agent_qa"))
+    assert [event.name for event in emitted] == expected
+    assert len(model.plans) == len(choices)
+    assert len(model.final) == 1
+    assert len(knowledge.scopes) == 1
+    assert knowledge.scopes[0] == (PUBLIC, 5, 0)
+    assert "Synthetic owned document" in model.final[0][3]
+    assert len(rag.scopes) == (1 if len(choices) == 3 else 0)
+    assert agent._slots._value == 1
 
 
 @pytest.mark.asyncio

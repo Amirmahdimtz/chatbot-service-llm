@@ -107,6 +107,34 @@ def test_agent_api_multi_tool_sse_persistence_and_regression(app, monkeypatch):
         assert events(general)[-1][1]["response_type"] == "direct_generated"
 
 
+def test_agent_duplicate_tool_decision_completes_sse_and_persists(app, monkeypatch):
+    calls, _ = model_stubs(monkeypatch, [
+        choose("list_owned_documents", {"limit": 5}),
+        choose("list_owned_documents", {"limit": 5}),
+    ])
+    with TestClient(app) as client:
+        response = client.post("/api/v1/chat/stream", json={
+            "scenario": "agent_qa", "message": "List my available documents",
+        }, headers=HEADERS)
+        assert response.status_code == 200
+        trace = events(response)
+        assert [name for name, _ in trace] == [
+            "message_start", "tool_start", "tool_result", "delta", "message_end",
+        ]
+        assert trace[2][1]["item_count"] == 0
+        assert trace[1][1]["call_id"] == trace[2][1]["call_id"]
+        assert trace[-1][1]["status"] == "completed"
+        assert trace[-1][1]["response_type"] == "agent_generated"
+        assert [item[0] for item in calls] == ["plan", "plan", "final"]
+        assert '"items":[]' in calls[-1][1]
+        conversation_id = trace[0][1]["conversation_id"]
+        history = client.get(f"/api/v1/conversation/{conversation_id}", headers=HEADERS)
+        assert history.status_code == 200
+        assert [item["status"] for item in history.json()["messages"]] == [
+            "completed", "completed",
+        ]
+
+
 def test_agent_rejects_bad_choices_and_no_spoofed_scope(app, monkeypatch):
     model_stubs(monkeypatch, [choose("shell", {})])
     with TestClient(app) as client:

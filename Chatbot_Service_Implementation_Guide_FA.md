@@ -726,11 +726,11 @@ storage:
 
 ### قرارداد اجرایی مرحله ۹ (2026-11-15)
 
-- Dataset مصنوعی \`benchmarks/stage9_scenarios_fa.json\` و Oracle برای هر هفت سناریو با تست‌های SQL/SSE، خروجی ساختاریافته و امنیت تهیه شد؛ Seed با مالک ثابت، Tenant آزمایشی و محدودیت نام DB از Production جدا است.
-- CI به تست PostgreSQL با Database جداگانه \`chatbot_stage9_ci\` گسترش یافت؛ Seed دارای Validation و اجرای مجدد بدون Version bump برای رکورد یکسان است.
-- Benchmark اختیاری \`benchmark_stage9_llm.py\` روی llama.cpp واقعی در loopback با TTFT، Total Latency، p50/p95 و token/s فقط در صورت Usage معتبر ارائه می‌شود. Mock در تست‌ها جایگزین نتیجه سخت‌افزار Windows نیست.
+- Dataset مصنوعی `benchmarks/stage9_scenarios_fa.json` و Oracle برای هر هفت سناریو با تست‌های SQL/SSE، خروجی ساختاریافته و امنیت تهیه شد؛ Seed با مالک ثابت، Tenant آزمایشی و محدودیت نام DB از Production جدا است.
+- CI به تست PostgreSQL با Database جداگانه `chatbot_stage9_ci` گسترش یافت؛ Seed دارای Validation و اجرای مجدد بدون Version bump برای رکورد یکسان است.
+- Benchmark اختیاری `benchmark_stage9_llm.py` روی llama.cpp واقعی در loopback با TTFT، Total Latency، p50/p95 و token/s فقط در صورت Usage معتبر ارائه می‌شود. Mock در تست‌ها جایگزین نتیجه سخت‌افزار Windows نیست.
 - ارزیابی فارسی/Agent با مدل محلی و مقایسه واقعی Dense/Hybrid/Reranking و منابع RAM/CPU هنوز نیازمند شواهد Local است؛ وضعیت Stage 9 تا آن زمان partial است.
-- Runbook و ماتریس Gap/Acceptance: \`docs/stage-9-validation.md\`؛ بدون Endpoint یا Migration جدید.
+- Runbook و ماتریس Gap/Acceptance: `docs/stage-9-validation.md`؛ بدون Endpoint یا Migration جدید.
 
 ## ۱۵. کیفیت، تست، مانیتورینگ و خطا
 

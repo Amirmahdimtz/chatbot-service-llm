@@ -9,3 +9,6 @@ __pycache__/
 storage/
 *.egg-info/
 benchmarks/results/
+stage9_*.sqlite
+stage9_*.sqlite3
+stage9-llm-*-local.json

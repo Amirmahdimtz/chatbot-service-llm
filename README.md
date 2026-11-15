@@ -1,5 +1,7 @@
 # chatbot-service-llm
 
+Stage 9 adds a [synthetic seven-scenario acceptance dataset, isolated seed/CI checks and optional local llama.cpp performance benchmark](docs/stage-9-validation.md). Stage 9 remains partial until actual Windows CPU/model/evidence evaluation; no new endpoints or migrations were needed.
+
 Stage 5 implements real ingestion of seven document formats, scoped Qdrant hybrid retrieval and local reranking. See the [Stage 5 ingestion runbook](docs/stage-5-ingestion-retrieval.md) and the [reproducible Persian retrieval benchmark](docs/stage-5-benchmark-fa.md). Actual Persian quality and CPU performance must be measured on Windows before final Stage 5 acceptance.
 
 Stage 4 introduces persistent PostgreSQL conversations and message history, with

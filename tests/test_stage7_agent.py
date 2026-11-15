@@ -55,8 +55,9 @@ class LocalModel:
         self.plans = []
         self.final = []
 
-    async def complete_json_async(self, message, history=None, system_prompt=None, evidence=None):
-        self.plans.append((message, history, system_prompt, evidence))
+    async def complete_json_async(self, message, history=None, system_prompt=None, evidence=None,
+                                  response_schema=None):
+        self.plans.append((message, history, system_prompt, evidence, response_schema))
         return next(self.choices)
 
     async def stream_chat_async(self, message, history=None, system_prompt=None, evidence=None):
@@ -96,6 +97,13 @@ async def test_real_two_tool_workflow_uses_prior_tool_result_and_citations():
     ]
     assert events[2].payload["documents"][0]["document_id"] == rag.source["document_id"]
     assert model.plans[1][3] and "Synthetic policy" in model.plans[1][3]
+    assert model.plans[0][4]["required"] == ["action", "tool", "arguments"]
+    assert model.plans[0][4]["properties"]["tool"]["anyOf"][0]["enum"] == [
+        "search_knowledge", "list_owned_documents",
+    ]
+    arguments = model.plans[0][4]["properties"]["arguments"]
+    assert set(arguments["properties"]) == {"query", "limit"}
+    assert arguments["additionalProperties"] is False
     assert "Synthetic owned document" in model.final[0][3]
     assert "UNTRUSTED" in model.final[0][3]
     assert rag.scopes == [(PUBLIC, "Synthetic policy")]
@@ -190,3 +198,15 @@ async def test_tool_timeout_and_disconnect_cleanup():
     assert (await anext(stream)).name == "tool_start"
     await stream.aclose()
     assert agent._slots._value == 1
+
+
+@pytest.mark.asyncio
+async def test_invalid_decision_logs_only_safe_validation_categories(caplog):
+    agent, _, _, _, _ = stack([{
+        "action": "tool", "tool": None,
+        "arguments": {"query": "SYNTHETIC_SENSITIVE_MARKER"},
+    }])
+    with pytest.raises(AgentError, match="AGENT_INVALID_DECISION"):
+        await collect_async(agent.run_async("docs", [], PUBLIC, "agent_qa"))
+    assert "Agent decision rejected" in caplog.text
+    assert "SYNTHETIC_SENSITIVE_MARKER" not in caplog.text

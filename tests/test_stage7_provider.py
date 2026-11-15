@@ -73,3 +73,41 @@ async def test_provider_http_error_sanitized_and_slot_released(monkeypatch):
     with pytest.raises(LlmStreamError, match="LLM_UNAVAILABLE"):
         await provider.complete_json_async("test")
     assert provider._slots._value == 1
+
+
+@pytest.mark.asyncio
+async def test_schema_constrained_decision_uses_llama_cpp_wrapper(monkeypatch):
+    """Restrict keys and selectable tools, never rely only on syntactic JSON."""
+    observed = []
+    original = httpx.AsyncClient
+
+    def handler(request):
+        observed.append(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content":
+            '{"action":"finish","tool":null,"arguments":{}}',
+        }}]})
+
+    monkeypatch.setattr(llama_cpp_provider.httpx, "AsyncClient",
+                        lambda **kw: original(transport=httpx.MockTransport(handler), **kw))
+    schema = {
+        "type": "object",
+        "properties": {
+            "action": {"type": "string", "enum": ["tool", "finish"]},
+            "tool": {"anyOf": [
+                {"type": "string", "enum": ["list_owned_documents"]},
+                {"type": "null"},
+            ]},
+            "arguments": {"type": "object"},
+        },
+        "required": ["action", "tool", "arguments"],
+        "additionalProperties": False,
+    }
+    result = await LlamaCppProvider(Config()).complete_json_async(
+        "List owned files", response_schema=schema,
+    )
+    assert result == {"action": "finish", "tool": None, "arguments": {}}
+    assert observed[0]["response_format"] == {
+        "type": "json_schema",
+        "json_schema": {"name": "agent_decision", "strict": True, "schema": schema},
+    }
+    assert observed[0]["stream"] is False

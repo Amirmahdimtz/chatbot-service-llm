@@ -2,7 +2,7 @@
 
 > **نام فایل:** `Chatbot_Service_Implementation_Guide_FA.md`  
 > **پروژه:** `chatbot-service-llm`  
-> **نسخه سند:** `1.4.0`  
+> **نسخه سند:** `1.4.1`  
 > **تاریخ تدوین:** `2026-11-10`  
 > **وضعیت:** قرارداد محصول و تصمیم‌های معماری مورد توافق؛ برخی تنظیمات مدل و استقرار محلی تا زمان Benchmark قابل اصلاح هستند.  
 > **سند همراه و الزامی:** `Service_Architecture_Guide_FA.md`
@@ -154,7 +154,9 @@ Local LLM provider (llama.cpp) / Authorized repositories / Qdrant
 Streaming answer + sources + structured results
 ```
 
-**قرارداد اجرایی مرحله ۷ (2026-11-15):** سناریوی `agent_qa` با مسیر `agent` به همان Chat و SSE اضافه می‌شود. Agent از Structured JSON selection مدل محلی با `response_format=json_object` استفاده می‌کند و خروجی را با Pydantic اعتبارسنجی می‌کند؛ پشتیبانی عملی مدل نصب‌شده و Native Tool Calling با `--jinja` هنوز در Windows باید سنجیده شود. دو ابزار Read-only و واقعی `search_knowledge` (بازیابی دانش مجاز) و `list_owned_documents` (فهرست Metadata اسناد مالک) تحت Allowlist و Trusted Identity/Tenant قابل استفاده‌اند. محدودیت تعداد مراحل/فراخوانی، Timeout، حجم داده و concurrency اعمال شده و نتیجه خام ابزار در SSE افشا نمی‌شود. جزئیات در `docs/stage-7-agent.md`. تایید کیفیت و سازگاری Runtime محلی برای Definition of Done باز است.
+**قرارداد اجرایی مرحله ۷ (2026-11-15):** سناریوی `agent_qa` با مسیر `agent` به همان Chat و SSE اضافه می‌شود. Agent از Structured JSON selection مدل محلی (در نسخه 1.4.1 با `response_format=json_schema` محدودشده) استفاده می‌کند و خروجی را با Pydantic اعتبارسنجی می‌کند؛ پشتیبانی عملی مدل نصب‌شده و Native Tool Calling با `--jinja` هنوز در Windows باید سنجیده شود. دو ابزار Read-only و واقعی `search_knowledge` (بازیابی دانش مجاز) و `list_owned_documents` (فهرست Metadata اسناد مالک) تحت Allowlist و Trusted Identity/Tenant قابل استفاده‌اند. محدودیت تعداد مراحل/فراخوانی، Timeout، حجم داده و concurrency اعمال شده و نتیجه خام ابزار در SSE افشا نمی‌شود. جزئیات در `docs/stage-7-agent.md`. تایید کیفیت و سازگاری Runtime محلی برای Definition of Done باز است.
+
+**اصلاح مرحله ۷ (2026-11-15):** آزمون واقعی Windows با `Qwen3-1.7B` به خطای `AGENT_INVALID_DECISION` پس از ۵۵ ثانیه رسید؛ چون `json_object` تضمین Schema تصمیم نبود. قالب تصمیم Agent به `response_format=json_schema` با wrapper سازگار با `llama.cpp` و enum ابزارهای مجاز تغییر کرد؛ Backend همچنان انتخاب و آرگومان‌ها را مستقل اعتبارسنجی می‌کند. فیلد دقیق نامعتبر در خروجی اولیه مشخص نیست. آزمون مجدد روی Build محلی و کیفیت انتخاب ابزار باز است.
 
 **قواعد اجرای Agent:**
 
@@ -829,6 +831,7 @@ storage:
 | 2026-11-10 | Dev Environment | Windows 11، CPU-only، 16GB، Docker Compose | قطعی بر اساس سخت‌افزار گزارش‌شده |
 | 2026-11-10 | تست داده‌ها | Fixtureهای ساختگی و قرارداد Import برای داده واقعی سازمان | قطعی |
 | 2026-11-10 | Authentication/Approval | SSO و سیاست تصویب نهایی متعلق به سازمان؛ اتصال امن و تحلیل قابل تحویل | قطعی در حد مسئولیت |
+| 2026-11-15 | Stage 7 JSON decision hardening | خطای واقعی `AGENT_INVALID_DECISION` در Qwen3: مهاجرت از `json_object` آزاد به schema-constrained `json_schema` با enum ابزار و Pydantic validation مستقل؛ آزمون Windows باز | Stage 7 fix pending local validation |
 | 2026-11-15 | Stage 7 internal agent | `agent_qa → agent`؛ تصمیم JSON اعتبارسنجی‌شده مدل محلی، Allowlist با دو Tool read-only، محدودیت Workflow، SSE Tool metadata و Isolation بدون Migration؛ آزمون Qwen3 محلی هنوز باز است | Stage 7 implementation (pending Windows validation) |
 | 2026-11-14 | Stage 6 routing | `general` → `direct_llm` (legacy default), `knowledge_qa` → `rag`; specialized scenarios remain outside Stage 6 | Stage 6 implementation |
 | 2026-11-14 | RAG evidence policy | Stage 5 authorized Retrieval only; conservative UTF-8-byte context budget and query-aware excerpt for oversized chunks; no fixed-prefix reranker truncation, SSE metadata excludes source URI | Stage 6 implementation |
@@ -886,6 +889,7 @@ LLM، Embedding و Reranking محلی، Runtime اصلی llama.cpp، Vector DB �
 | نسخه | تاریخ | تغییر |
 |---|---|---|
 | `1.0.0` | `2026-11-10` | تدوین سند جامع از تصمیم‌های توافق‌شده درباره هسته چت‌بات، پنج سناریو، Agent داخلی، یک Deployment، LLM محلی، Qdrant، RAG، SSE، Storage، تست و سخت‌افزار محلی. |
+| `1.4.1` | `2026-11-15` | ثبت خطای مشاهده‌شده Windows و اصلاح تولید ساختاریافته تصمیم با JSON Schema محدودکننده؛ پذیرش Runtime در انتظار تست مجدد. |
 | `1.4.0` | `2026-11-15` | Stage 7: agent_qa routing, bounded validated JSON tool workflow, two authorized read-only tools, tool SSE, regression tests, local runtime acceptance pending. |
 | `1.3.0` | `2026-11-14` | Stage 6: scenario routing, authorized RAG, citation metadata, internal tenant/permission guard and SSE response types. |
 | `1.2.7` | `2026-11-14` | ثبت نتایج واقعی آزمایش معکوس ۲۰ سؤال و آزمون منفی پنج سند بلند، رد برش ثابت ۱۲۰ کاراکتری به‌علت افت MRR و حفظ رفتار اصلی Retrieval؛ مستندسازی مسیر بررسی Query-aware در آینده. |

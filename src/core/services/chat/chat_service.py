@@ -39,6 +39,7 @@ _MESSAGES = {
     "AGENT_INVALID_TOOL": "The model selected an unavailable tool.",
     "AGENT_INVALID_ARGUMENTS": "The model supplied invalid tool arguments.",
     "AGENT_INVALID_DECISION": "The model returned an invalid tool decision.",
+    "AGENT_TOOL_SCHEMA_CONFLICT": "The available tools have incompatible input schemas.",
     "AGENT_LIMIT": "The agent reached its workflow limit.",
     "AGENT_REPEATED_CALL": "The agent repeated a tool call.",
     "AGENT_TOOL_OUTPUT_LIMIT": "An authorized tool result exceeded the size limit.",

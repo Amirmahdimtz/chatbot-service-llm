@@ -5,6 +5,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 import json
+import logging
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -15,6 +16,8 @@ from src.core.services.chat.chat_identity_service import ChatIdentity
 from src.infrastructure.di.inject import inject
 from src.infrastructure.providers.llm.llama_cpp_provider import LlamaCppProvider
 from src.infrastructure.utils.config_reader import ConfigReader
+
+logger = logging.getLogger(__name__)
 
 
 class AgentError(RuntimeError):
@@ -72,6 +75,35 @@ class AgentService:
             raise ValueError("Invalid agent workflow configuration")
         self._slots = asyncio.Semaphore(concurrency)
 
+    @staticmethod
+    def _decision_schema(tools: list[dict[str, Any]]) -> dict[str, Any]:
+        """Constrain the LLM decision shape; tool input validation remains authoritative."""
+        names = [item["name"] for item in tools]
+        # Constrain argument keys to declared server-owned Pydantic tool schemas.
+        # Individual tool schemas remain authoritative for required fields/values.
+        argument_properties: dict[str, Any] = {}
+        for item in tools:
+            for key, value in item["parameters"].get("properties", {}).items():
+                existing = argument_properties.get(key)
+                if existing is not None and existing != value:
+                    raise AgentError("AGENT_TOOL_SCHEMA_CONFLICT")
+                argument_properties[key] = value
+        return {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["tool", "finish"]},
+                "tool": {"anyOf": [
+                    {"type": "string", "enum": names}, {"type": "null"},
+                ]},
+                "arguments": {
+                    "type": "object", "properties": argument_properties,
+                    "additionalProperties": False,
+                },
+            },
+            "required": ["action", "tool", "arguments"],
+            "additionalProperties": False,
+        }
+
     def _observations(self, results: list[dict[str, Any]]) -> str:
         serialized = json.dumps(results, ensure_ascii=False, separators=(",", ":"))
         if len(serialized.encode("utf-8")) > self._context_budget:
@@ -106,10 +138,17 @@ class AgentService:
                         decision_data = await self._provider.complete_json_async(
                             message, history=history, system_prompt=prompt,
                             evidence=self._observations(observations) if observations else None,
+                            response_schema=self._decision_schema(tools),
                         )
                         try:
                             decision = ToolDecision.model_validate(decision_data)
                         except ValidationError as exc:
+                            # Record only field categories and error types, never model output.
+                            safe = sorted({
+                                f"{entry['loc'][0] if entry['loc'] and entry['loc'][0] in ('action', 'tool', 'arguments') else 'model'}:{entry['type']}"
+                                for entry in exc.errors()
+                            })
+                            logger.warning("Agent decision rejected: %s", ",".join(safe))
                             raise AgentError("AGENT_INVALID_DECISION") from exc
                         if decision.action == "finish":
                             break

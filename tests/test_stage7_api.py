@@ -50,7 +50,8 @@ def model_stubs(monkeypatch, choices, evidence=True):
               "title": "Synthetic authorized record", "version": 1,
               "source_location": {"page": 2}}
 
-    async def complete_json_async(self, message, history=None, system_prompt=None, evidence=None):
+    async def complete_json_async(self, message, history=None, system_prompt=None, evidence=None,
+                                  response_schema=None):
         calls.append(("plan", evidence))
         return next(decisions)
 

@@ -126,6 +126,7 @@ def require_isolated_database(url: str) -> str:
 
 
 async def seed_async(url: str, fixture: dict) -> dict[str, int]:
+    require_isolated_database(url)
     # The seed runner is a standalone composition root; no app or development identity bypass.
     os.environ["CHATBOT_DATABASE_URL"] = url
     os.environ["ENV_TYPE"] = "development"

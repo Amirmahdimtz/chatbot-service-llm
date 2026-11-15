@@ -176,7 +176,7 @@ async def test_duplicate_or_exhausted_budget_finalizes_without_extra_planning(ch
     assert len(knowledge.scopes) == 1
     assert knowledge.scopes[0] == (PUBLIC, 5, 0)
     assert "Synthetic owned document" in model.final[0][3]
-    assert len(rag.scopes) == (1 if len(choices) == 2 else 0)
+    assert len(rag.scopes) == sum(choice["tool"] == "search_knowledge" for choice in choices)
     assert agent._slots._value == 1
 
 

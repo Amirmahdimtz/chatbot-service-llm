@@ -2,7 +2,7 @@
 
 > **نام فایل:** `Chatbot_Service_Implementation_Guide_FA.md`  
 > **پروژه:** `chatbot-service-llm`  
-> **نسخه سند:** `1.6.0`  
+> **نسخه سند:** `1.6.1`  
 > **تاریخ تدوین:** `2026-11-10`  
 > **وضعیت:** قرارداد محصول و تصمیم‌های معماری مورد توافق؛ برخی تنظیمات مدل و استقرار محلی تا زمان Benchmark قابل اصلاح هستند.  
 > **سند همراه و الزامی:** `Service_Architecture_Guide_FA.md`
@@ -728,6 +728,8 @@ storage:
 
 - Dataset مصنوعی `benchmarks/stage9_scenarios_fa.json` و Oracle برای هر هفت سناریو با تست‌های SQL/SSE، خروجی ساختاریافته و امنیت تهیه شد؛ Seed با مالک ثابت، Tenant آزمایشی و محدودیت نام DB از Production جدا است.
 - CI به تست PostgreSQL با Database جداگانه `chatbot_stage9_ci` گسترش یافت؛ Seed دارای Validation و اجرای مجدد بدون Version bump برای رکورد یکسان است.
+- Dataset مکمل `benchmarks/stage9_rag_qa_fa.json` با ۲۰ پاسخ مرجع فارسی و کنترل منفی؛ ارزیابی Read-only روی `knowledge/search` و گزارش Full ایزوله، بدون انتساب مصنوعی Citation Precision معنایی.
+- ثبت اختیاری پاسخ متنی مدل محلی فقط برای Promptهای مصنوعی با `--include-responses` و سقف خروجی، جهت داوری انسانی کیفیت فارسی.
 - Benchmark اختیاری `benchmark_stage9_llm.py` روی llama.cpp واقعی در loopback با TTFT، Total Latency، p50/p95 و token/s فقط در صورت Usage معتبر ارائه می‌شود. Mock در تست‌ها جایگزین نتیجه سخت‌افزار Windows نیست.
 - ارزیابی فارسی/Agent با مدل محلی و مقایسه واقعی Dense/Hybrid/Reranking و منابع RAM/CPU هنوز نیازمند شواهد Local است؛ وضعیت Stage 9 تا آن زمان partial است.
 - Runbook و ماتریس Gap/Acceptance: `docs/stage-9-validation.md`؛ بدون Endpoint یا Migration جدید.
@@ -838,6 +840,7 @@ storage:
 
 | تاریخ | موضوع | تصمیم | وضعیت |
 |---|---|---|---|
+| 2026-11-15 | Stage 9 RAG evidence evaluation | ۲۰ سؤال فارسی مرجع و دو کنترل منفی، سنجش پوشش Answer Span در سند مجاز، جداسازی نتایج Mock و Real؛ کیفیت معنایی پاسخ LLM تا ارزیابی محلی تأیید نمی‌شود | Stage 9 implementation; local RAG/Agent evaluation pending |
 | 2026-11-15 | Stage 9 isolated synthetic evaluation | Dataset نسخه‌دار تمام هفت سناریو با Oracle؛ Seed فقط در DB نام‌گذاری‌شده آزمایشی و با Marker صریح، بدون حذف یا overwrite داده متعلق به دیگران | Stage 9 implementation; Local confirmation pending |
 | 2026-11-15 | Stage 9 real local model benchmark | Stream واقعی llama.cpp روی loopback، Warm-up، TTFT/Latency p50/p95؛ token/s فقط با usage واقعی؛ Mock و نتایج CPU/RAM ارزیابی‌نشده جدا می‌مانند | partial — pending local benchmark |
 | 2026-11-10 | مرجع معماری | `Service_Architecture_Guide_FA.md` | قطعی |
@@ -920,6 +923,7 @@ LLM، Embedding و Reranking محلی، Runtime اصلی llama.cpp، Vector DB �
 | نسخه | تاریخ | تغییر |
 |---|---|---|
 | `1.0.0` | `2026-11-10` | تدوین سند جامع از تصمیم‌های توافق‌شده درباره هسته چت‌بات، پنج سناریو، Agent داخلی، یک Deployment، LLM محلی، Qdrant، RAG، SSE، Storage، تست و سخت‌افزار محلی. |
+| `1.6.1` | `2026-11-15` | افزوده‌شدن Dataset ۲۰ سؤال فارسی RAG، سنجش Read-only پاسخ مرجع در متن Chunk و امکان ثبت اختیاری خروجی Model برای ارزیابی انسانی. |
 | `1.6.0` | `2026-11-15` | Stage 9: Dataset مصنوعی نسخه‌دار، Seed ایزوله و قابل تکرار، آزمون E2E/SQL/SSE، CI PostgreSQL و Benchmark اختیاری llama.cpp؛ پذیرش کیفیت مدل و سخت‌افزار Windows همچنان باز است. |
 | `1.5.0` | `2026-11-15` | پیاده‌سازی هفت زیرفرآیند مرحله ۸، Store ساختاریافته Scopeدار، Agent Tool محدود، SSE/History و قراردادهای Test. |
 | `1.4.6` | `2026-11-15` | پذیرش Runtime مرحله ۷ با Qwen3 محلی، تأیید هر دو Tool/SSE و Persistence، ثبت محدودیت Collection خالی و پیگیری Citation E2E در مرحله ۹. |

@@ -20,7 +20,7 @@
 | Identity و tenant | Implemented | Stage 3/4/7/8 API | امکان Regression IDOR و Forged Claims | تست Stage 9 public/internal، tenant، malicious attrs | 401/403/404/422 برای درخواست نامعتبر و عدم نشت |
 | Conversation، Feedback، SSE | Implemented | Stage 3/4/6/8 | تست بار و قطع واقعی Client نیازمند محیط اجرایی | Regression سراسری؛ SSE/History Stage 9 | framing، ordering، completed/cancelled/failed و ownership |
 | Ingestion و Qdrant | Implemented | Stage 5 API/Workflow/Qdrant | Recovery و OCR فارسی واقعی وابسته به محیط | CI موجود و Runbook Stage 5، بدون بازنویسی | ارزیابی هفت فرمت، hybrid dense+lexical و lifecycle |
-| RAG | Partial acceptance | Stage 5 Persian benchmark | Citation precision معنایی، nonempty-evidence E2E و مقایسه کنترل‌شده Dense/Hybrid هنوز باز | ابزارهای Stage 5 حفظ؛ آزمایش Local/Optional | Recall@5، MRR@5، Citation Issues، p50/p95 latency |
+| RAG | Partial acceptance | Stage 5 Persian benchmark | Citation precision معنایی، nonempty-evidence E2E و مقایسه کنترل‌شده Dense/Hybrid هنوز باز | `stage9_rag_qa_fa.json`، `evaluate_stage9_rag.py` و تست‌های Validation/MockTransport | Recall@5، MRR@5، Reference Answer Coverage، Citation Issues و Latency |
 | Agent | Partial acceptance | Stage 7 Tool tests، Stage 8 Domain tests | شواهد واقعی ابزار و کیفیت فارسی مدل سبک | Oracle سناریوها + تست محدودیت و مجوز موجود | Correct Tool، no unauthorized calls، step/tool/time limits |
 | Benchmark LLM | Missing | readiness/stream tests | TTFT واقعی، token/s و Resource Metrics نامعلوم | `benchmark_stage9_llm.py`، prompts JSON و تست MockTransport | warm-up، p50/p95، بدون جعل token/s |
 | CI / PostgreSQL | Partial | Python 3.11/3.12، PostgreSQL مرحله ۴، Qdrant مرحله ۵ | نبود PostgreSQL seed-stage9 قابل تکرار | `tests/test_stage9_postgres.py`، workflow | Migration روی DB جدید CI؛ idempotency و scope تست واقعی |
@@ -31,6 +31,8 @@
 ## Dataset و معیارهای ارزیابی
 
 `benchmarks/stage9_scenarios_fa.json` فقط داده جعلی است: FAQ تأییدشده و سؤال فاقد منبع، افراد دارای Skills/Experience/Availability مختلف، Positionهای دارای Hard/Soft Constraints، Capacity، Mobility، Research دارای Source، برنامه رشد و DAG با Cycle/Shortage. هر Case دارای پاسخ مرجع ساختاریافته و انتظار status است. آزمون SQL/SSE این Oracle را با خروجی واقعی الگوریتم سناریو مقایسه می‌کند.
+
+`benchmarks/stage9_rag_qa_fa.json` شامل ۲۰ پرسش فارسی با پاسخ مرجعِ استخراج‌شده از متن ۱۰ سند مصنوعی مرحله ۵ و دو پرسش کنترل منفی است. `evaluate_stage9_rag.py` فقط روی API موجود و گزارش `full` مرحله ۵ با Corpus ایزوله و یکسان کار می‌کند. وجود پاسخ مرجع در Chunk سند صحیح اندازه‌گیری می‌شود؛ این معیار **Citation Precision معنایی پاسخ LLM نیست**.
 
 `benchmarks/stage9_llm_prompts_fa.json` دارای چهار Prompt فارسی نسخه‌دار برای ارزیابی انسانی رعایت دستور، عدم جعل استناد، استدلال درباره ریسک و مقاومت در برابر Prompt Injection است. هیچ‌کدام مبنای ادعای کیفیت قطعی مدل بدون بررسی خروجی واقعی نیستند.
 
@@ -58,7 +60,7 @@ git pull --ff-only origin main
 git rev-parse HEAD
 python -m pip install -r requirements-dev.txt
 python -m compileall -q src tests
-python -m pytest -q tests/test_stage9_scenarios.py tests/test_stage9_benchmark.py
+python -m pytest -q tests/test_stage9_scenarios.py tests/test_stage9_benchmark.py tests/test_stage9_rag_evaluation.py
 python -m pytest -q
 python -m alembic -c src/infrastructure/alembic/alembic.ini history
 python -m src.infrastructure.scripts.seed_stage9
@@ -122,16 +124,29 @@ if ((Test-Path $LlamaServerExe) -and (Test-Path $ModelFile)) {
 ```powershell
 Invoke-RestMethod 'http://127.0.0.1:8080/health'
 Invoke-RestMethod 'http://127.0.0.1:8080/v1/models'
-python -m src.infrastructure.scripts.benchmark_stage9_llm --base-url http://127.0.0.1:8080 --model-label Qwen3-1.7B --quantization Q4_K_M --runs 3 --warmup 1 --output .\stage9-llm-1p7b-local.json
+python -m src.infrastructure.scripts.benchmark_stage9_llm --base-url http://127.0.0.1:8080 --model-label Qwen3-1.7B --quantization Q4_K_M --runs 3 --warmup 1 --include-responses --output .\stage9-llm-1p7b-local.json
 Get-Process -Name llama-server -ErrorAction SilentlyContinue | Select-Object Id, CPU, WorkingSet64, PeakWorkingSet64
 # Run the resource sampler concurrently in another PowerShell window while benchmarking:
 # $ServerPid = (Get-Process -Name llama-server | Select-Object -First 1).Id
 # .\scripts\monitor-stage9-llama.ps1 -ProcessId $ServerPid -DurationSeconds 120 -IntervalSeconds 1 -OutputPath .\stage9-llama-1p7b.csv
 ```
 
-همان مراحل را جداگانه برای `Qwen3-4B-Instruct-2507` تکرار کنید **فقط اگر واقعاً مدل GGUF و حافظه کافی وجود دارد**. اسکریپت خروجی JSON با شناسه مدل سرو‌شده، SHA256 Dataset، Warmup، تعداد خطا، TTFT/Latency و p50/p95 می‌سازد. `generated_tokens_per_second` فقط در صورت وجود `completion_tokens` واقعی در Streaming Usage محاسبه می‌شود؛ `characters_per_second_proxy` هرگز token/s نیست. `Get-Process` تنها Snapshot و PeakWorkingSet از زمان آغاز Process است؛ برای نمونه‌برداری دوره‌ای از RAM و CPU از `scripts/monitor-stage9-llama.ps1` در پنجره دوم استفاده کنید: CPU به درصد ظرفیت کل Logical CPU و RAM به MiB ذخیره می‌شود. `PeakWorkingSet` از زمان Launch پردازش است، نه فقط بازه تست؛ Snapshot و Timeline را با یکدیگر اشتباه نگیرید.
+همان مراحل را جداگانه برای `Qwen3-4B-Instruct-2507` تکرار کنید **فقط اگر واقعاً مدل GGUF و حافظه کافی وجود دارد**. اسکریپت خروجی JSON با شناسه مدل سرو‌شده، SHA256 Dataset، Warmup، تعداد خطا، TTFT/Latency و p50/p95 می‌سازد. فلگ اختیاری `--include-responses` پاسخ همان Promptهای کاملاً مصنوعی را با سقف ۸۱۹۲ کاراکتر در JSON ثبت می‌کند تا کیفیت فارسی، ادعاهای بدون شاهد و رعایت دستور به‌صورت انسانی بررسی شود؛ پیش از ارسال فایل خروجی آن را بازبینی و در صورت نیاز پاک‌سازی کنید. بدون این فلگ، متن پاسخ ذخیره نمی‌شود. `generated_tokens_per_second` فقط در صورت وجود `completion_tokens` واقعی در Streaming Usage محاسبه می‌شود؛ `characters_per_second_proxy` هرگز token/s نیست. `Get-Process` تنها Snapshot و PeakWorkingSet از زمان آغاز Process است؛ برای نمونه‌برداری دوره‌ای از RAM و CPU از `scripts/monitor-stage9-llama.ps1` در پنجره دوم استفاده کنید: CPU به درصد ظرفیت کل Logical CPU و RAM به MiB ذخیره می‌شود. `PeakWorkingSet` از زمان Launch پردازش است، نه فقط بازه تست؛ Snapshot و Timeline را با یکدیگر اشتباه نگیرید.
 
 Benchmark Retrieval/Reranking مرحله ۵ همان مسیر قبلی را دارد: `docs/stage-5-benchmark-fa.md`، `docs/stage-5-ingestion-retrieval.md` و اسکریپت‌های `benchmark_stage5_fa.py` و `benchmark_stage5_rerank_ab_fa.py`. آنها ممکن است اسناد عمومی مصنوعی را در DB مورد تست ثبت کنند؛ فقط در محیط ایزوله و با رضایت صریح خودتان اجرا شوند. Endpoint داخلی Stage 9 به Production اضافه نشده است.
+
+## ارزیابی شواهد RAG فارسی با API واقعی (Read-only)
+
+پیش‌نیاز، یک گزارش `full` واقعی از `benchmark_stage5_fa.py` در یک محیط کاملاً مصنوعی و ایزوله است. اگر هنوز گزارش ندارید، بخش Benchmark مرحله ۵ را بخوانید؛ اجرای اولیه آن **اسناد آزمایشی را ثبت می‌کند** و فقط با `--confirm-write` مجاز است. این Script مرحله ۹ **چیزی Upload/Update/Delete نمی‌کند** و فقط Retrieval مجاز Public را می‌سنجد.
+
+```powershell
+$Stage5FullReport = Read-Host 'Path to clean Stage 5 full benchmark JSON'
+if (-not (Test-Path -LiteralPath $Stage5FullReport)) { throw 'Stage 5 full report not found' }
+# CHATBOT_DEV_API_TOKEN must be available privately in the current PowerShell process.
+python -m src.infrastructure.scripts.evaluate_stage9_rag --base-url http://127.0.0.1:18031 --stage5-report $Stage5FullReport --output .\benchmarks\results\stage9-rag-evaluation-local.json
+```
+
+گزارش شامل Recall@5، MRR@5، Source Coverage پاسخ مرجع در متن، Citation Metadata و Latency جست‌وجو است. وجود یک سند در Top-5 اثبات نمی‌کند که Chunk حاوی پاسخ است؛ این دو مقدار جدا گزارش می‌شوند. سؤال‌های فاقد پاسخ ممکن است نزدیک‌ترین اسناد نامرتبط را بازیابی کنند؛ بررسی انسانی ارتباط الزامی است. مقایسه Dense-only/Hybrid، کیفیت معنایی Citation تولیدی و RAG/Agent E2E با مدل هنوز آزمون مستقل لازم دارند.
 
 ## CI و ارسال شواهد
 
@@ -141,7 +156,7 @@ GitHub Actions: `.github/workflows/tests.yml`، Python 3.11/3.12 + تمام تس
 
 1. `git status --short`، `git rev-parse HEAD`؛ متن خلاصه `pytest -q` و نام هر تست ناموفق.
 2. `docker compose ps` و `alembic current`، بدون Secret.
-3. فایل JSON خام Benchmark 1.7B (و 4B در صورت امکان) و Command/Version واقعی `llama-server`، بدون API Key.
+3. فایل JSON خام Benchmark 1.7B (و 4B در صورت امکان)، گزارش RAG در صورت فراهم‌بودن Corpus ایزوله و Command/Version واقعی `llama-server`، بدون API Key.
 4. خلاصه `Get-Process` برای RAM/CPU، با ذکر اینکه Snapshot است.
 5. در صورت نیاز، فقط خطاهای sanitised از `docker compose logs --tail 80 app`؛ هرگز `.env`، Authorization Header یا داده واقعی پرسنل را نفرستید.
 

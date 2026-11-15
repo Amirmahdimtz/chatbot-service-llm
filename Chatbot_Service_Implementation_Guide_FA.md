@@ -2,7 +2,7 @@
 
 > **نام فایل:** `Chatbot_Service_Implementation_Guide_FA.md`  
 > **پروژه:** `chatbot-service-llm`  
-> **نسخه سند:** `1.4.6`  
+> **نسخه سند:** `1.5.0`  
 > **تاریخ تدوین:** `2026-11-10`  
 > **وضعیت:** قرارداد محصول و تصمیم‌های معماری مورد توافق؛ برخی تنظیمات مدل و استقرار محلی تا زمان Benchmark قابل اصلاح هستند.  
 > **سند همراه و الزامی:** `Service_Architecture_Guide_FA.md`
@@ -125,6 +125,8 @@
 **خروجی:** پیشنهاد تقسیم وظایف ساختاریافته، دلایل انتخاب و موارد نیازمند بررسی.
 
 **قاعده مشترک سناریوها:** هیچ‌یک صرفاً یک Prompt ثابت با خروجی متن آزاد نیست؛ هر سناریو باید Validation، Service Logic، دسترسی به داده/ابزار موردنیاز، خروجی ساختاریافته قابل تست و پاسخ قابل فهم کاربر داشته باشد.
+
+**قرارداد اجرایی مرحله ۸ (2026-11-15):** هفت زیرفرآیند با شناسه‌های `religious_qa`، `personnel_matching`، `talent_discovery`، `internal_transfers`، `research_advice`، `personal_development` و `task_allocation` به API و SSE مشترک متصل می‌شوند. `scenario_input` در شش سناریوی ساختاریافته لازم و با Pydantic اعتبارسنجی می‌شود. Toolهای محدود Agent داخلی و قواعد محاسباتی قطعی، داده‌های PostgreSQL را فقط در Scope معتبر مصرف می‌کنند. قرارداد کامل در `docs/stage-8-scenarios.md` است.
 
 ---
 
@@ -841,6 +843,10 @@ storage:
 | 2026-11-10 | Dev Environment | Windows 11، CPU-only، 16GB، Docker Compose | قطعی بر اساس سخت‌افزار گزارش‌شده |
 | 2026-11-10 | تست داده‌ها | Fixtureهای ساختگی و قرارداد Import برای داده واقعی سازمان | قطعی |
 | 2026-11-10 | Authentication/Approval | SSO و سیاست تصویب نهایی متعلق به سازمان؛ اتصال امن و تحلیل قابل تحویل | قطعی در حد مسئولیت |
+| 2026-11-15 | Stage 8 structured scenario storage | PostgreSQL `scenario_records` با Audience/Tenant Scope، رکوردهای versioned و Schemaهای Pydantic؛ بدون Seed تولیدی | Stage 8 implementation |
+| 2026-11-15 | Stage 8 tool execution | یک Tool محدود و Server-selected برای هر Scenario تخصصی؛ محاسبات قواعد شغلی، Capacity، Skill Gap و DAG خارج از LLM | Stage 8 implementation |
+| 2026-11-15 | Stage 8 FAQ and review | تنها هویت داخلی با `religious:verify` مجاز به ثبت FAQ تأییدشده با Provenance است؛ در نبود تطبیق، RAG یا Pending Record. FAQ SQL به Vector Reindex نیاز ندارد | Stage 8 implementation |
+| 2026-11-15 | Stage 8 structured SSE and History | رویداد افزایشی `scenario_result` و ستون nullable `chat_messages.scenario_payload` برای ثبت ساختار نهایی | Stage 8 implementation |
 | 2026-11-15 | Stage 7 Windows acceptance | در Commit `3293425` هر دو Tool در Qdrant بدون Collection اجرا شدند، SSE بدون تصمیم سوم به `completed` رسید (48.32s)، تست‌های محلی 31 passed و History قبلی تأیید شد؛ E2E Citation غیرخالی و Benchmark به مرحله ۹ تعلق دارند | Stage 7 development scope completed |
 | 2026-11-15 | Stage 7 stop planning on tool budget | بعد از دو Tool موفق و بدون سند، تصمیم سوم مدل `AGENT_INVALID_DECISION` داد؛ پس از مصرف سقف فراخوانی، Agent از Observationها پاسخ نهایی می‌سازد و Planner دیگر فراخوانی نمی‌شود؛ History قبلی در Windows تأیید شد | Stage 7 pending local validation |
 | 2026-11-15 | Stage 7 empty Qdrant and History diagnosis | خطای ابزار Search با علت نامعلوم در Qdrant ایزوله، عدم پنهان‌سازی Index گم‌شده با Metadata approved، Logging صرفاً با کلاس استثنا و پیگیری History | Stage 7 pending local validation |
@@ -904,6 +910,7 @@ LLM، Embedding و Reranking محلی، Runtime اصلی llama.cpp، Vector DB �
 | نسخه | تاریخ | تغییر |
 |---|---|---|
 | `1.0.0` | `2026-11-10` | تدوین سند جامع از تصمیم‌های توافق‌شده درباره هسته چت‌بات، پنج سناریو، Agent داخلی، یک Deployment، LLM محلی، Qdrant، RAG، SSE، Storage، تست و سخت‌افزار محلی. |
+| `1.5.0` | `2026-11-15` | پیاده‌سازی هفت زیرفرآیند مرحله ۸، Store ساختاریافته Scopeدار، Agent Tool محدود، SSE/History و قراردادهای Test. |
 | `1.4.6` | `2026-11-15` | پذیرش Runtime مرحله ۷ با Qwen3 محلی، تأیید هر دو Tool/SSE و Persistence، ثبت محدودیت Collection خالی و پیگیری Citation E2E در مرحله ۹. |
 | `1.4.5` | `2026-11-15` | جلوگیری از تصمیم‌گیری اضافی بعد از مصرف سقف Tool Calling، ثبت موفقیت دو Tool در Windows و تأیید Persistence. |
 | `1.4.4` | `2026-11-15` | حفاظت از Retrieval با Collection غایب و ثبت شواهد دو خطای Windows جهت ارزیابی مجدد. |

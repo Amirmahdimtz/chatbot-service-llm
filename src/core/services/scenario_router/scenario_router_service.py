@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from src.core.services.scenarios.scenario_contracts import SCENARIO_INPUTS
+
 from src.core.services.chat.chat_identity_service import ChatIdentity
 from src.core.services.errors import PermissionDenied
 from src.infrastructure.di.inject import inject
@@ -19,10 +21,12 @@ class ScenarioRoute:
 class ScenarioRouterService:
     """Explicit, trusted routing for direct, knowledge QA and read-only Agent workflows."""
 
-    _ROUTES: dict[str, Literal["direct_llm", "rag"]] = {
+    _ROUTES: dict[str, Literal["direct_llm", "rag", "agent"]] = {
         "general": "direct_llm",
         "knowledge_qa": "rag",
         "agent_qa": "agent",
+        "religious_qa": "rag",
+        **{scenario: "agent" for scenario in SCENARIO_INPUTS},
     }
 
     def route(self, scenario: str | None, identity: ChatIdentity) -> ScenarioRoute:
@@ -39,6 +43,12 @@ class ScenarioRouterService:
         path = self._ROUTES.get(selected)
         if path is None:
             raise ValueError("Unsupported scenario")
-        if path in {"rag", "agent"} and identity.audience == "internal" and "knowledge:read_internal" not in identity.permissions:
+        if selected in SCENARIO_INPUTS:
+            from src.core.services.scenarios.scenario_service import ScenarioService
+            ScenarioService.authorize(identity, selected)
+        elif selected == "religious_qa":
+            from src.core.services.scenarios.scenario_service import ScenarioService
+            ScenarioService.authorize(identity, selected)
+        elif path in {"rag", "agent"} and identity.audience == "internal" and "knowledge:read_internal" not in identity.permissions:
             raise PermissionDenied("Internal knowledge access requires permission")
         return ScenarioRoute(selected, path)

@@ -1,4 +1,4 @@
-name: Stage 2-6 checks
+name: Stage 2-8 checks
 on:
   push:
     branches: [main]
@@ -40,7 +40,7 @@ jobs:
           python -c 'from pathlib import Path; p=Path("src/host/entrypoint.sh"); p.write_bytes(p.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")); assert b"\r\n" in p.read_bytes()'
       - name: Build and start infrastructure
         run: docker compose up -d --build --wait --wait-timeout 240
-      - name: Apply committed Stage 4-5 Alembic migrations
+      - name: Apply committed Stage 4-8 Alembic migrations
         run: |
           docker compose exec -T app python -m alembic -c src/infrastructure/alembic/alembic.ini upgrade head
           docker compose exec -T app python -m alembic -c src/infrastructure/alembic/alembic.ini current

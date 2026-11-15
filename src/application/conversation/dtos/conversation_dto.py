@@ -23,6 +23,7 @@ class ConversationMessageDto(BaseModel):
     sequence: int
     role: Literal["user", "assistant", "system", "tool"]
     content: str
+    scenario_payload: dict | None = None
     status: Literal["streaming", "completed", "failed", "cancelled"]
     created_at: datetime
 

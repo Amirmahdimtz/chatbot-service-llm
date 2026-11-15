@@ -4,7 +4,9 @@ from __future__ import annotations
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator, ValidationError
+
+from src.core.services.scenarios.scenario_contracts import SCENARIO_INPUTS
 
 
 class ChatRequestDto(BaseModel):
@@ -12,7 +14,23 @@ class ChatRequestDto(BaseModel):
 
     message: str = Field(min_length=1, max_length=1000)
     conversation_id: UUID | None = Field(default=None, strict=False)
-    scenario: Literal["general", "knowledge_qa", "agent_qa"] = "general"
+    scenario: Literal[
+        "general", "knowledge_qa", "agent_qa", "religious_qa",
+        "personnel_matching", "talent_discovery", "internal_transfers",
+        "research_advice", "personal_development", "task_allocation",
+    ] = "general"
+    scenario_input: dict | None = None
+
+    @model_validator(mode="after")
+    def validate_scenario_input(self):
+        if self.scenario in SCENARIO_INPUTS:
+            if self.scenario_input is None:
+                raise ValueError("Structured scenario_input is required")
+            self.scenario_input = SCENARIO_INPUTS[self.scenario].model_validate(
+                self.scenario_input).model_dump(mode="json")
+        elif self.scenario_input is not None:
+            raise ValueError("scenario_input not supported for this scenario")
+        return self
 
     @field_validator("message")
     @classmethod
@@ -28,7 +46,11 @@ class MessageStartDto(BaseModel):
     message_id: UUID
     conversation_id: UUID
     role: Literal["assistant"] = "assistant"
-    scenario: Literal["general", "knowledge_qa"] = "general"
+    scenario: Literal[
+        "general", "knowledge_qa", "agent_qa", "religious_qa",
+        "personnel_matching", "talent_discovery", "internal_transfers",
+        "research_advice", "personal_development", "task_allocation",
+    ] = "general"
     route: Literal["direct_llm", "rag", "agent"] = "direct_llm"
 
 
@@ -40,7 +62,10 @@ class MessageEndDto(BaseModel):
     request_id: UUID
     message_id: UUID
     status: Literal["completed", "failed", "cancelled"]
-    response_type: Literal["direct_generated", "rag_generated", "insufficient_evidence", "agent_generated"] | None = None
+    response_type: Literal[
+        "direct_generated", "rag_generated", "insufficient_evidence",
+        "agent_generated", "verified_faq",
+    ] | None = None
 
 
 class ChatErrorDto(BaseModel):
@@ -64,12 +89,17 @@ class SourcesDto(BaseModel):
 
 
 class ToolStartDto(BaseModel):
-    tool: Literal["search_knowledge", "list_owned_documents"]
+    tool: str = Field(min_length=1, max_length=64)
     call_id: UUID
 
 
 class ToolResultDto(BaseModel):
-    tool: Literal["search_knowledge", "list_owned_documents"]
+    tool: str = Field(min_length=1, max_length=64)
     call_id: UUID
     status: Literal["completed"]
     item_count: int = Field(ge=0)
+
+
+class ScenarioResultEventDto(BaseModel):
+    result: dict
+

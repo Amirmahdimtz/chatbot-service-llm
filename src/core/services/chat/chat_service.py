@@ -11,6 +11,8 @@ from src.core.services.chat.chat_identity_service import ChatIdentity
 from src.core.services.conversation.conversation_service import ConversationService
 from src.core.services.rag.rag_service import RagRetrievalError, RagService
 from src.core.services.scenario_router.scenario_router_service import ScenarioRouterService
+from src.core.services.scenarios.scenario_contracts import SCENARIO_INPUTS
+from src.core.services.scenarios.scenario_service import ScenarioService
 from src.infrastructure.di.inject import inject
 from src.infrastructure.providers.llm.llama_cpp_provider import LlamaCppProvider, LlmStreamError
 from src.infrastructure.utils.config_reader import ConfigReader
@@ -89,12 +91,14 @@ class ChatService:
     async def stream_async(
         self, message: str, request_id: UUID, message_id: UUID,
         conversation_id: UUID, identity: ChatIdentity, scenario: str | None = None,
+        scenario_input: dict | None = None, scenario_service: ScenarioService | None = None,
     ) -> AsyncIterator[ChatEvent]:
         chunks: list[str] = []
         chars = 0
         status: str | None = None
         iterator = None
         response_type = "direct_generated"
+        structured_result: dict | None = None
         try:
             route = self._router.route(scenario, identity)
             yield ChatEvent("message_start", {
@@ -103,7 +107,50 @@ class ChatService:
                 "scenario": route.scenario, "route": route.path,
             })
             history = self._recent_history(await self._conversations.prior_context_async(str(message_id), identity))
-            if route.path == "rag":
+            if route.scenario == "religious_qa":
+                if scenario_service is None:
+                    raise RuntimeError("Scenario service unavailable")
+                decision = await scenario_service.religious_async(identity, message)
+                response_type = decision.response_type
+                structured_result = {
+                    "scenario": "religious_qa", "response_type": response_type,
+                    "sources": list(decision.sources),
+                    "pending_id": decision.pending_id,
+                }
+                if decision.sources:
+                    documents = [item for item in decision.sources if "document_id" in item]
+                    references = [item for item in decision.sources if "document_id" not in item]
+                    yield ChatEvent("sources", {"documents": documents, "references": references})
+                yield ChatEvent("scenario_result", {"result": structured_result})
+                if response_type == "rag_generated":
+                    iterator = self._provider.stream_chat_async(
+                        message, history=history, system_prompt=self._rag.SYSTEM_PROMPT,
+                        evidence=decision.evidence,
+                    )
+                else:
+                    if len(decision.answer) > self._max_output_chars:
+                        raise LlmStreamError("OUTPUT_LIMIT")
+                    chunks.append(decision.answer)
+                    chars += len(decision.answer)
+                    yield ChatEvent("delta", {"text": decision.answer})
+            elif route.scenario in SCENARIO_INPUTS:
+                response_type = "agent_generated"
+                if scenario_service is None:
+                    raise RuntimeError("Scenario service unavailable")
+                iterator = self._agent.run_scenario_async(
+                    message, scenario_input or {}, identity, route.scenario, scenario_service,
+                )
+                async for agent_event in iterator:
+                    if agent_event.name == "scenario_result":
+                        structured_result = agent_event.payload["result"]
+                    if agent_event.name == "delta":
+                        delta = agent_event.payload["text"]
+                        chars += len(delta)
+                        if chars > self._max_output_chars:
+                            raise LlmStreamError("OUTPUT_LIMIT")
+                        chunks.append(delta)
+                    yield ChatEvent(agent_event.name, agent_event.payload)
+            elif route.path == "rag":
                 context = await self._rag.prepare_async(identity, message)
                 if context.sources:
                     yield ChatEvent("sources", {"documents": list(context.sources)})
@@ -143,7 +190,14 @@ class ChatService:
                     yield ChatEvent("delta", {"text": delta})
             if chars == 0:
                 raise LlmStreamError("LLM_EMPTY_RESPONSE")
-            if not await self._conversations.finalize_async(str(message_id), identity, "completed", "".join(chunks)):
+            if structured_result is None:
+                saved = await self._conversations.finalize_async(
+                    str(message_id), identity, "completed", "".join(chunks))
+            else:
+                saved = await self._conversations.finalize_async(
+                    str(message_id), identity, "completed", "".join(chunks),
+                    scenario_payload=structured_result)
+            if not saved:
                 raise RuntimeError("Terminal transition rejected")
             status = "completed"
             yield ChatEvent("message_end", {

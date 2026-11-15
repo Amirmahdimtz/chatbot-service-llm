@@ -48,7 +48,8 @@ class ChatMessageRepository(BaseRepository[ChatMessage]):
                 raise
 
     async def finalize_async(
-        self, message_id: str, owner_id: str, audience: str, status: str, content: str
+        self, message_id: str, owner_id: str, audience: str, status: str, content: str,
+        scenario_payload: dict | None = None,
     ) -> bool:
         if status not in {"completed", "failed", "cancelled"}:
             raise ValueError("Invalid terminal status")
@@ -64,6 +65,8 @@ class ChatMessageRepository(BaseRepository[ChatMessage]):
                     return False
                 now = datetime.now(timezone.utc)
                 message.content = content
+                if status == "completed":
+                    message.scenario_payload = scenario_payload
                 message.status = status
                 message.updated_at = now
                 parent = await session.get(Conversation, message.conversation_id)

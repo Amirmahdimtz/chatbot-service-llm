@@ -29,7 +29,10 @@ def authenticate_request(
         return api_error("FORBIDDEN", "Untrusted identity scope.", 403, request_id)
     if identity.audience == "internal":
         allowed_permissions = {"chat:use_internal", "knowledge:read_internal",
-                               "knowledge:read_public", "knowledge:write", "knowledge:publish"}
+                               "knowledge:read_public", "knowledge:write", "knowledge:publish",
+                               "scenario:manage", "religious:verify", "hr:analyze",
+                               "research:analyze", "development:analyze",
+                               "development:self", "tasks:analyze"}
         if (not isinstance(identity.tenant_id, str) or not identity.tenant_id.strip()
                 or not (identity.permissions & allowed_permissions)):
             return api_error("FORBIDDEN", "Valid internal tenant and permissions required.", 403, request_id)

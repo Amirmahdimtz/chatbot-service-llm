@@ -13,6 +13,7 @@ from src.application.chat.dtos.chat_dto import ChatRequestDto
 from src.core.services.chat.chat_identity_service import ChatIdentityService
 from src.core.services.chat.chat_service import ChatService
 from src.core.services.errors import PermissionDenied, ResourceNotFound
+from src.core.services.scenarios.scenario_service import ScenarioService
 from src.infrastructure.di.inject import inject
 
 
@@ -22,9 +23,11 @@ def encode_sse(event: str, payload: dict) -> str:
 
 @inject
 class ChatController:
-    def __init__(self, chat_service: ChatService, chat_identity_service: ChatIdentityService) -> None:
+    def __init__(self, chat_service: ChatService, chat_identity_service: ChatIdentityService,
+                 scenario_service: ScenarioService) -> None:
         self._chat_service = chat_service
         self._identity = chat_identity_service
+        self._scenarios = scenario_service
 
     def api(self) -> APIRouter:
         router = APIRouter(tags=["Chat"])
@@ -63,7 +66,7 @@ class ChatController:
             async def stream_events_async():
                 iterator = self._chat_service.stream_async(
                     payload.message, request_id, UUID(message_id), UUID(conversation_id), principal,
-                    payload.scenario,
+                    payload.scenario, payload.scenario_input, self._scenarios,
                 )
                 try:
                     async for event in iterator:

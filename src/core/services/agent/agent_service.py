@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from src.core.services.agent.tools.tool_registry import AgentToolError, AgentToolRegistry
 from src.core.services.chat.chat_identity_service import ChatIdentity
+from src.core.services.scenarios.scenario_service import ScenarioService
 from src.infrastructure.di.inject import inject
 from src.infrastructure.providers.llm.llama_cpp_provider import LlamaCppProvider
 from src.infrastructure.utils.config_reader import ConfigReader
@@ -138,6 +139,51 @@ class AgentService:
         if len(serialized.encode("utf-8")) > self._context_budget:
             raise AgentError("AGENT_CONTEXT_LIMIT")
         return serialized
+
+    async def run_scenario_async(self, message: str, arguments: dict[str, Any],
+                                 identity: ChatIdentity, scenario: str,
+                                 scenario_service: ScenarioService) -> AsyncIterator[AgentEvent]:
+        """A single server-selected, bounded tool; the LLM cannot alter explicit rules."""
+        available = self._tools.available(identity, scenario)
+        if len(available) != 1:
+            raise AgentError("AGENT_TOOL_DENIED")
+        if scenario_service is None:
+            raise AgentError("AGENT_TOOL_FAILED")
+        try:
+            await asyncio.wait_for(self._slots.acquire(), timeout=0.02)
+        except TimeoutError as exc:
+            raise AgentError("AGENT_BUSY") from exc
+        try:
+            async with asyncio.timeout(self._workflow_timeout):
+                name, call_id = available[0]["name"], str(uuid4())
+                yield AgentEvent("tool_start", {"tool": name, "call_id": call_id})
+                try:
+                    async with asyncio.timeout(self._tool_timeout):
+                        result = await self._tools.run_scenario_async(
+                            scenario, arguments, identity, message, scenario_service)
+                except AgentToolError as exc:
+                    raise AgentError(exc.code) from exc
+                except TimeoutError as exc:
+                    raise AgentError("AGENT_TOOL_TIMEOUT") from exc
+                yield AgentEvent("tool_result", {
+                    "tool": name, "call_id": call_id, "status": "completed",
+                    "item_count": len(result["items"]),
+                })
+                if result["sources"]:
+                    yield AgentEvent("sources", {"documents": [], "references": result["sources"]})
+                yield AgentEvent("scenario_result", {"result": result})
+                count = len(result["items"])
+                if result["status"] == "completed":
+                    text = f"تحلیل {scenario} با {count} پیشنهاد قابل بررسی آماده شد. تصمیم نهایی نیازمند ارزیابی انسانی است."
+                elif result["status"] == "conflict":
+                    text = f"تحلیل {scenario} با {count} پیشنهاد و محدودیت‌های شناسایی‌شده آماده شد؛ تعارض‌ها نیاز به بررسی دارند."
+                else:
+                    text = f"برای تحلیل {scenario} داده معتبر کافی در محدوده دسترسی موجود نیست."
+                yield AgentEvent("delta", {"text": text})
+        except TimeoutError as exc:
+            raise AgentError("AGENT_TIMEOUT") from exc
+        finally:
+            self._slots.release()
 
     async def run_async(self, message: str, history: list[dict[str, str]],
                         identity: ChatIdentity, scenario: str) -> AsyncIterator[AgentEvent]:

@@ -54,7 +54,8 @@ def test_scenario_routing_defaults_to_direct_and_never_uses_prompt_claims():
     assert router.route("general", PUBLIC).path == "direct_llm"
     assert router.route("knowledge_qa", PUBLIC).path == "rag"
     assert router.route("knowledge_qa", INTERNAL).path == "rag"
-    for scenario in ("admin", "internal", "", "religious_qa"):
+    assert router.route("religious_qa", PUBLIC).path == "rag"
+    for scenario in ("admin", "internal", ""):
         with pytest.raises(ValueError):
             router.route(scenario, PUBLIC)
     for identity in (

@@ -61,8 +61,10 @@ class ConversationService:
         )
 
     async def finalize_async(
-        self, message_id: str, identity: ChatIdentity, status: str, content: str
+        self, message_id: str, identity: ChatIdentity, status: str, content: str,
+        scenario_payload: dict | None = None,
     ) -> bool:
         return await self._messages.finalize_async(
-            message_id, scoped_conversation_owner(identity), identity.audience, status, content
+            message_id, scoped_conversation_owner(identity), identity.audience,
+            status, content, scenario_payload,
         )

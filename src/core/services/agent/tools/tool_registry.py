@@ -12,6 +12,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from src.core.services.chat.chat_identity_service import ChatIdentity
 from src.core.services.knowledge.knowledge_service import KnowledgeService
 from src.core.services.rag.rag_service import RagService
+from src.core.services.scenarios.scenario_contracts import SCENARIO_INPUTS, ScenarioResult
+from src.core.services.scenarios.scenario_service import ScenarioService
+from src.core.services.errors import PermissionDenied
 from src.infrastructure.di.inject import inject
 from src.infrastructure.utils.config_reader import ConfigReader
 
@@ -78,6 +81,12 @@ class ToolSpec:
 class AgentToolRegistry:
     """Only hardcoded operations are callable; model output never becomes code or scope."""
 
+    _SCENARIO_TOOLS = tuple(
+        ToolSpec("analyze_" + name, "Read-only tenant-scoped deterministic scenario analysis.",
+                 schema, ScenarioResult, scenario=name)
+        for name, schema in SCENARIO_INPUTS.items()
+    )
+
     _TOOLS = (
         ToolSpec("search_knowledge", "Search authorized knowledge and return excerpts with citations.",
                  SearchKnowledgeArgs, SearchKnowledgeOutput),
@@ -90,6 +99,9 @@ class AgentToolRegistry:
         self._rag = rag_service
         self._knowledge = knowledge_service
         self._max_bytes = int(config_reader.get("agent.max_tool_output_size", 3072))
+        self._scenario_bytes = int(config_reader.get("scenario.max_result_bytes", 32768))
+        if not 1024 <= self._scenario_bytes <= 65536:
+            raise ValueError("Invalid scenario result byte limit")
         if not 256 <= self._max_bytes <= 16384:
             raise ValueError("agent.max_tool_output_size must be between 256 and 16384")
 
@@ -105,6 +117,14 @@ class AgentToolRegistry:
         return identity.tenant_id is None
 
     def available(self, identity: ChatIdentity, scenario: str) -> list[dict[str, Any]]:
+        if scenario in SCENARIO_INPUTS:
+            try:
+                ScenarioService.authorize(identity, scenario)
+            except PermissionDenied:
+                return []
+            return [{"name": item.name, "description": item.description,
+                     "parameters": item.args_schema.model_json_schema()}
+                    for item in self._SCENARIO_TOOLS if item.scenario == scenario]
         if not self._allowed(identity, scenario):
             return []
         return [{"name": tool.name, "description": tool.description,
@@ -146,4 +166,29 @@ class AgentToolRegistry:
                 "Agent tool failed: tool=%s error_type=%s cause_type=%s",
                 name, type(exc).__name__, type(cause).__name__ if cause else "none",
             )
+            raise AgentToolError("AGENT_TOOL_FAILED") from exc
+
+    async def run_scenario_async(self, scenario: str, arguments: dict[str, Any],
+                                 identity: ChatIdentity, message: str,
+                                 scenario_service: ScenarioService) -> dict[str, Any]:
+        tools = self.available(identity, scenario)
+        if len(tools) != 1:
+            raise AgentToolError("AGENT_TOOL_DENIED")
+        try:
+            arguments = SCENARIO_INPUTS[scenario].model_validate(arguments).model_dump(mode="json")
+        except (ValidationError, ValueError, TypeError, KeyError) as exc:
+            raise AgentToolError("AGENT_INVALID_ARGUMENTS") from exc
+        try:
+            outcome = await scenario_service.analyze_async(scenario, arguments, identity, message)
+            result = ScenarioResult.model_validate(outcome).model_dump(mode="json")
+            if len(json.dumps(result, ensure_ascii=False).encode("utf-8")) > self._scenario_bytes:
+                raise AgentToolError("AGENT_TOOL_OUTPUT_LIMIT")
+            return result
+        except PermissionDenied as exc:
+            raise AgentToolError("AGENT_TOOL_DENIED") from exc
+        except AgentToolError:
+            raise
+        except Exception as exc:
+            logger.warning("Scenario analysis failed: scenario=%s error_type=%s",
+                           scenario, type(exc).__name__)
             raise AgentToolError("AGENT_TOOL_FAILED") from exc

@@ -14,7 +14,7 @@ from src.infrastructure.providers.document.text_pipeline import chunk_sections, 
 from src.infrastructure.providers.embedding.embedding_provider import EmbeddingProvider
 from src.infrastructure.providers.reranking.reranking_provider import RerankingProvider
 from src.infrastructure.providers.storage.storage_provider import StorageProvider
-from src.infrastructure.providers.vector_db.qdrant_provider import QdrantProvider
+from src.infrastructure.providers.vector_db.qdrant_provider import QdrantProvider, VectorIndexError
 from src.infrastructure.repositories.knowledge.knowledge_repository import KnowledgeRepository
 from src.infrastructure.utils.config_reader import ConfigReader
 
@@ -219,13 +219,26 @@ class KnowledgeIndexService:
                     {"key": "published", "match": {"value": True}},
                     {"key": "owner_id", "match": {"value": identity.subject}},
                 ]}
-            rankings.append(await self._vectors.query_async(
-                scope, embedding, "dense", filters, self._first_stage
-            ))
-            if sparse["indices"]:
-                rankings.append(await self._vectors.query_async(
+            try:
+                dense = await self._vectors.query_async(
+                    scope, embedding, "dense", filters, self._first_stage
+                )
+                lexical = (await self._vectors.query_async(
                     scope, sparse, "lexical", filters, self._first_stage
-                ))
+                )) if sparse["indices"] else None
+            except VectorIndexError as exc:
+                if str(exc) != "VECTOR_NOT_FOUND":
+                    raise
+                # New empty deployments may have no collection before first ingestion.
+                # Do not hide missing indexes when approved SQL metadata exists.
+                if (await self._vectors.collection_exists_async(scope)
+                        or await self._documents.has_approved_index_async(scope)):
+                    raise
+                logger.info("Uninitialized %s collection has no approved metadata", scope)
+                continue
+            rankings.append(dense)
+            if lexical is not None:
+                rankings.append(lexical)
         candidates = reciprocal_rank_fusion(rankings, self._rrf_k)
         visible = await self._documents.visible_async(
             list({str(item.get("payload", {}).get("document_id", "")) for item in candidates}), identity

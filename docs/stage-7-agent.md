@@ -51,6 +51,26 @@ Values in both appsettings YAMLs:
 
 Requests also share the existing `llm.max_concurrent_requests=1`, LLM output max and history budget. A repeated identical tool call is **not re-executed**: planning stops and the final answer streams using only previously validated authorized observations, even when the allowed tool-call budget is exhausted. An unexecuted new call beyond the budget, missing finish decision within step limit, excessive output/context, request/step timeout and model failure remain terminal sanitized errors. For an empty `list_owned_documents` result, final generation must state the lack of visible owned documents without inventing documents or implying that all tenant documents are absent. Note that UTF-8-byte budgeting is conservative, not an exact tokenizer.
 
+## Fresh Qdrant collection retrieval and safe diagnostics
+
+The isolated Stage 7 environment may not yet have Qdrant collections because
+ingestion creates them on first indexing. A read-only search never creates a
+collection. On `VECTOR_NOT_FOUND`, the system verifies that the collection
+really is absent and PostgreSQL contains **no approved documents** for that
+collection's audience. Only in this case it returns empty authorized evidence;
+all other vector errors, existing collections with 404 queries, or missing
+collections with approved document metadata fail closed. No data is deleted,
+reset, or reindexed. Public/internal scope checks remain enforced in Core.
+
+The Windows `search_knowledge` test reported `AGENT_TOOL_FAILED`, possibly
+because of the uninitialized collection; the exact cause is not confirmed
+without observing local Qdrant metadata and safe provider exception types.
+The tool now logs exception **class names only**, not the question, document,
+credentials, HTTP body, or arbitrary exception messages. A separate local
+Conversation history validation mismatch remains under investigation; the
+authenticated GET contract returns `messages[]`, and the HTTP status,
+property names and message count should be inspected without printing content.
+
 ## Windows PowerShell — isolated development validation
 
 Keep the Stage 6 Compose project and all volumes intact. Use a *new* Compose project and ports to avoid collisions. This script assumes local `llama.cpp` services 8080/8081/8082 are already configured; do not reinstall or restart them without checking first.

@@ -62,6 +62,16 @@ class QdrantProvider:
         except httpx.RequestError:
             return False
 
+    async def collection_exists_async(self, audience: str) -> bool:
+        """Read-only existence probe; never create collections from a search request."""
+        try:
+            await self._request_async("GET", f"/collections/{self.collection(audience)}")
+            return True
+        except VectorIndexError as exc:
+            if str(exc) == "VECTOR_NOT_FOUND":
+                return False
+            raise
+
     async def check_api_async(self) -> bool:
         try:
             payload = await self._request_async("GET", "/collections")

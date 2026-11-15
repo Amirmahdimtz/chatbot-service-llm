@@ -124,6 +124,16 @@ class KnowledgeRepository(BaseRepository[KnowledgeDocument]):
             await session.commit()
             return result.rowcount == 1
 
+    async def has_approved_index_async(self, audience: str) -> bool:
+        """Keep a missing Qdrant collection fatal when any approved document exists."""
+        async with self._db_context.session() as session:
+            return (await session.scalar(
+                select(KnowledgeDocument.id).where(
+                    KnowledgeDocument.audience == audience,
+                    KnowledgeDocument.status == "approved",
+                ).limit(1)
+            )) is not None
+
     async def visible_async(self, document_ids: list[str], identity) -> dict[str, KnowledgeDocument]:
         if not document_ids:
             return {}

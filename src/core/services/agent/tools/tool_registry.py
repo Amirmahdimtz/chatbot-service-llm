@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
@@ -13,6 +14,8 @@ from src.core.services.knowledge.knowledge_service import KnowledgeService
 from src.core.services.rag.rag_service import RagService
 from src.infrastructure.di.inject import inject
 from src.infrastructure.utils.config_reader import ConfigReader
+
+logger = logging.getLogger(__name__)
 
 
 class AgentToolError(RuntimeError):
@@ -137,4 +140,10 @@ class AgentToolRegistry:
         except AgentToolError:
             raise
         except Exception as exc:
+            # Only exception classes, never raw query text, model output or documents.
+            cause = exc.__cause__
+            logger.warning(
+                "Agent tool failed: tool=%s error_type=%s cause_type=%s",
+                name, type(exc).__name__, type(cause).__name__ if cause else "none",
+            )
             raise AgentToolError("AGENT_TOOL_FAILED") from exc

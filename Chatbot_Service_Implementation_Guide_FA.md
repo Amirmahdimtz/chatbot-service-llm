@@ -842,7 +842,8 @@ storage:
 |---|---|---|---|
 | 2026-11-15 | Stage 9 RAG evidence evaluation | ۲۰ سؤال فارسی مرجع و دو کنترل منفی، سنجش پوشش Answer Span در سند مجاز، جداسازی نتایج Mock و Real؛ کیفیت معنایی پاسخ LLM تا ارزیابی محلی تأیید نمی‌شود | Stage 9 implementation; local RAG/Agent evaluation pending |
 | 2026-11-15 | Stage 9 isolated synthetic evaluation | Dataset نسخه‌دار تمام هفت سناریو با Oracle؛ Seed فقط در DB نام‌گذاری‌شده آزمایشی و با Marker صریح، بدون حذف یا overwrite داده متعلق به دیگران | Stage 9 implementation; Local confirmation pending |
-| 2026-11-15 | Stage 9 real local model benchmark | Stream واقعی llama.cpp روی loopback، Warm-up، TTFT/Latency p50/p95؛ token/s فقط با usage واقعی؛ Mock و نتایج CPU/RAM ارزیابی‌نشده جدا می‌مانند | partial — pending local benchmark |
+| 2026-11-15 | Stage 9 real local model benchmark | Stream واقعی llama.cpp روی loopback، Warm-up، TTFT/Latency p50/p95؛ token/s فقط با usage واقعی؛ Mock و نتایج CPU/RAM جدا می‌مانند | local 1.7B benchmark passed; quality/resource acceptance pending |
+| 2026-11-15 | Stage 9 Persian answer quality review | مدل سبک Qwen3-1.7B در هشت درخواست بدون خطای HTTP و با ۶ پایان طبیعی/۲ پایان به‌علت سقف توکن اجرا شد؛ در داوری چهار Prompt، کیفیت فارسی و تبعیت دقیق از دستور کافی نبود. Baseline عملیاتی بودن به معنی پذیرش کیفیت یا امنیت نیست؛ هرگونه تعویض مدل پس از A/B کنترل‌شده و سنجش منابع انجام شود؛ فعلاً Production unchanged | observed acceptance gap; no model switch approved |
 | 2026-11-10 | مرجع معماری | `Service_Architecture_Guide_FA.md` | قطعی |
 | 2026-11-10 | دامنه پروژه | پیاده‌سازی تمام سناریوها، بدون تقسیم تحویل به فازهای مستقل | قطعی |
 | 2026-11-10 | Deployment | یک FastAPI مشترک برای Public + Internal | قطعی |
@@ -923,6 +924,7 @@ LLM، Embedding و Reranking محلی، Runtime اصلی llama.cpp، Vector DB �
 | نسخه | تاریخ | تغییر |
 |---|---|---|
 | `1.0.0` | `2026-11-10` | تدوین سند جامع از تصمیم‌های توافق‌شده درباره هسته چت‌بات، پنج سناریو، Agent داخلی، یک Deployment، LLM محلی، Qdrant، RAG، SSE، Storage، تست و سخت‌افزار محلی. |
+| `1.6.2` | `2026-11-15` | ثبت شواهد Windows Benchmark 1.7B، جداسازی موفقیت فنی از کیفیت فارسی، مشاهده پایان زودهنگام دو پاسخ و حفظ مدل فعلی به‌عنوان Baseline تا مقایسه کنترل‌شده. |
 | `1.6.1` | `2026-11-15` | افزوده‌شدن Dataset ۲۰ سؤال فارسی RAG، سنجش Read-only پاسخ مرجع در متن Chunk و امکان ثبت اختیاری خروجی Model برای ارزیابی انسانی. |
 | `1.6.0` | `2026-11-15` | Stage 9: Dataset مصنوعی نسخه‌دار، Seed ایزوله و قابل تکرار، آزمون E2E/SQL/SSE، CI PostgreSQL و Benchmark اختیاری llama.cpp؛ پذیرش کیفیت مدل و سخت‌افزار Windows همچنان باز است. |
 | `1.5.0` | `2026-11-15` | پیاده‌سازی هفت زیرفرآیند مرحله ۸، Store ساختاریافته Scopeدار، Agent Tool محدود، SSE/History و قراردادهای Test. |

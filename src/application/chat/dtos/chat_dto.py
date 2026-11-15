@@ -101,5 +101,5 @@ class ToolResultDto(BaseModel):
 
 
 class ScenarioResultEventDto(BaseModel):
-    result: ScenarioResult | ReligiousResult = Field(discriminator="scenario")
+    result: ScenarioResult | ReligiousResult
 

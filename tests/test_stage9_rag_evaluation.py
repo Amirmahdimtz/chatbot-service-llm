@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from uuid import NAMESPACE_DNS, uuid5
 
 import httpx
@@ -9,7 +10,7 @@ import pytest
 
 from src.infrastructure.scripts.benchmark_stage5_fa import BenchmarkError, load_fixture
 from src.infrastructure.scripts.evaluate_stage9_rag import (
-    evaluate_response, load_dataset, run_evaluation,
+    evaluate_response, load_dataset, main, run_evaluation,
 )
 
 
@@ -54,6 +55,7 @@ def _synthetic_results():
     report = {
         "benchmark": "stage5-fa-v1",
         "mode": "full",
+        "base_url": "http://127.0.0.1:18031",
         "fixture_sha256": fixture_hash,
         "shared_corpus_warning": False,
         "document_count": len(fixture),
@@ -129,3 +131,35 @@ def test_shared_corpus_or_wrong_dataset_report_is_rejected():
     ) as client:
         with pytest.raises(BenchmarkError, match="isolated"):
             run_evaluation(client, dataset, report, digest)
+
+
+def test_rejects_a_report_from_another_isolated_api_port():
+    dataset, digest = load_dataset()
+    _, _, report = _synthetic_results()
+    report["base_url"] = "http://localhost:18010"
+
+    def unexpected_request(_):
+        raise AssertionError("Cross-instance retrieval must not begin")
+
+    with httpx.Client(
+        base_url="http://127.0.0.1:18031/api/v1",
+        transport=httpx.MockTransport(unexpected_request),
+    ) as client:
+        with pytest.raises(BenchmarkError, match="different ports"):
+            run_evaluation(client, dataset, report, digest)
+
+
+def test_missing_public_dev_token_reports_safe_actionable_error(
+    tmp_path, monkeypatch, capsys,
+):
+    monkeypatch.delenv("CHATBOT_DEV_API_TOKEN", raising=False)
+    monkeypatch.setattr(sys, "argv", [
+        "evaluate_stage9_rag",
+        "--stage5-report", str(tmp_path / "report.json"),
+        "--output", str(tmp_path / "result.json"),
+    ])
+    assert main() == 1
+    error = capsys.readouterr().err
+    assert "CHATBOT_DEV_API_TOKEN must be set privately" in error
+    assert "Bearer" not in error
+    assert "Traceback" not in error

@@ -140,10 +140,21 @@ Benchmark Retrieval/Reranking مرحله ۵ همان مسیر قبلی را دا
 پیش‌نیاز، یک گزارش `full` واقعی از `benchmark_stage5_fa.py` در یک محیط کاملاً مصنوعی و ایزوله است. اگر هنوز گزارش ندارید، بخش Benchmark مرحله ۵ را بخوانید؛ اجرای اولیه آن **اسناد آزمایشی را ثبت می‌کند** و فقط با `--confirm-write` مجاز است. این Script مرحله ۹ **چیزی Upload/Update/Delete نمی‌کند** و فقط Retrieval مجاز Public را می‌سنجد.
 
 ```powershell
-$Stage5FullReport = Read-Host 'Path to clean Stage 5 full benchmark JSON'
+$Stage5FullReport = 'D:\chatbot-service-llm\benchmarks\results\fa20261114125025-full.json' # Example: use your actual Stage 5 report
 if (-not (Test-Path -LiteralPath $Stage5FullReport)) { throw 'Stage 5 full report not found' }
-# CHATBOT_DEV_API_TOKEN must be available privately in the current PowerShell process.
-python -m src.infrastructure.scripts.evaluate_stage9_rag --base-url http://127.0.0.1:18031 --stage5-report $Stage5FullReport --output .\benchmarks\results\stage9-rag-evaluation-local.json
+$Stage5 = Get-Content -LiteralPath $Stage5FullReport -Raw -Encoding UTF8 | ConvertFrom-Json
+$Stage5 | Select-Object mode, base_url, shared_corpus_warning, document_count, preexisting_non_run_documents
+# Use the original isolated API port, not the regular app's port 18031.
+$Stage5Api = [string]$Stage5.base_url
+if (-not $Stage5Api -or $Stage5.mode -ne 'full' -or $Stage5.shared_corpus_warning -ne $false) {
+    throw 'Stage 5 report is not a clean full isolated report'
+}
+# CHATBOT_DEV_API_TOKEN must be available privately in this PowerShell process.
+if (-not $env:CHATBOT_DEV_API_TOKEN -or $env:CHATBOT_DEV_API_TOKEN.Length -lt 32) {
+    throw 'Set CHATBOT_DEV_API_TOKEN privately for the isolated synthetic public API'
+}
+Invoke-WebRequest ($Stage5Api.TrimEnd('/') + '/api/v1/health') -UseBasicParsing
+python -m src.infrastructure.scripts.evaluate_stage9_rag --base-url $Stage5Api --stage5-report $Stage5FullReport --output .\benchmarks\results\stage9-rag-evaluation-local.json
 ```
 
 گزارش شامل Recall@5، MRR@5، Source Coverage پاسخ مرجع در متن، Citation Metadata و Latency جست‌وجو است. وجود یک سند در Top-5 اثبات نمی‌کند که Chunk حاوی پاسخ است؛ این دو مقدار جدا گزارش می‌شوند. سؤال‌های فاقد پاسخ ممکن است نزدیک‌ترین اسناد نامرتبط را بازیابی کنند؛ بررسی انسانی ارتباط الزامی است. مقایسه Dense-only/Hybrid، کیفیت معنایی Citation تولیدی و RAG/Agent E2E با مدل هنوز آزمون مستقل لازم دارند.

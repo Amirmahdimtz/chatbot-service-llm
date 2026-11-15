@@ -12,6 +12,7 @@ from pathlib import Path
 import statistics
 import sys
 import time
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -82,6 +83,18 @@ def run_evaluation(client: httpx.Client, dataset: dict, report: dict, digest: st
             or report.get("document_count") != len(stage5)
             or not isinstance(report.get("documents"), dict)):
         raise BenchmarkError("A full clean Stage 5 isolated report from the same corpus is required")
+    # Compare against the original isolated local stack, not the regular API.
+    # localhost and 127.0.0.1 are equivalent loopback aliases.
+    source_api = report.get("base_url")
+    if not isinstance(source_api, str):
+        raise BenchmarkError("Stage 5 report is missing its source API address")
+    source_port = urlsplit(require_local_url(source_api)).port
+    target_port = urlsplit(str(client.base_url)).port
+    if source_port != target_port:
+        raise BenchmarkError(
+            "Stage 5 report and target API use different ports; "
+            "run against the original isolated Stage 5 stack"
+        )
     documents = report["documents"]
     if set(documents) != {doc["key"] for doc in stage5}:
         raise BenchmarkError("Stage 5 report has incomplete document references")
@@ -161,7 +174,11 @@ def main() -> int:
             file.write("\n")
         print(json.dumps(outcome["metrics"], ensure_ascii=False))
         return 0
-    except (BenchmarkError, ValueError, OSError, httpx.HTTPError) as exc:
+    except BenchmarkError as exc:
+        # These controlled contract errors contain no API key or raw response body.
+        print("RAG evaluation failed: " + str(exc), file=sys.stderr)
+        return 1
+    except (ValueError, OSError, httpx.HTTPError) as exc:
         print("RAG evaluation failed: " + exc.__class__.__name__, file=sys.stderr)
         return 1
 

@@ -12,3 +12,4 @@ benchmarks/results/
 stage9_*.sqlite
 stage9_*.sqlite3
 stage9-llm-*-local.json
+stage9-llama-*.csv

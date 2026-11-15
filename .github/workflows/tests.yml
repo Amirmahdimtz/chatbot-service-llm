@@ -112,6 +112,26 @@ jobs:
               throw "Missing second generated secret"
           }
           Write-Host "CRLF, idempotence, and preservation checks passed."
+      - name: Validate Stage 9 PowerShell resource sampler
+        shell: powershell
+        run: |
+          $Tokens = $null
+          $Errors = $null
+          $ScriptPath = (Resolve-Path ".\scripts\monitor-stage9-llama.ps1").ProviderPath
+          [System.Management.Automation.Language.Parser]::ParseFile(
+              $ScriptPath, [ref]$Tokens, [ref]$Errors
+          ) | Out-Null
+          if ($Errors.Count -ne 0) { throw "Stage 9 sampler contains syntax errors." }
+          $Bytes = [IO.File]::ReadAllBytes($ScriptPath)
+          if (@($Bytes | Where-Object { $_ -gt 127 }).Count -ne 0) {
+              throw "Stage 9 sampler must be ASCII for Windows PowerShell 5.1."
+          }
+          $Output = Join-Path $env:RUNNER_TEMP "stage9-monitor.csv"
+          & $ScriptPath -ProcessId $PID -DurationSeconds 2 -IntervalSeconds 1 -OutputPath $Output
+          if (-not (Test-Path $Output)) { throw "Stage 9 sampler did not export CSV." }
+          if (@(Import-Csv -LiteralPath $Output).Count -lt 1) {
+              throw "Stage 9 sampler returned no samples."
+          }
       - name: Validate Stage 3 SSE script on Windows PowerShell 5.1
         shell: powershell
         run: |

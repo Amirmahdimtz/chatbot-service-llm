@@ -124,9 +124,12 @@ Invoke-RestMethod 'http://127.0.0.1:8080/health'
 Invoke-RestMethod 'http://127.0.0.1:8080/v1/models'
 python -m src.infrastructure.scripts.benchmark_stage9_llm --base-url http://127.0.0.1:8080 --model-label Qwen3-1.7B --quantization Q4_K_M --runs 3 --warmup 1 --output .\stage9-llm-1p7b-local.json
 Get-Process -Name llama-server -ErrorAction SilentlyContinue | Select-Object Id, CPU, WorkingSet64, PeakWorkingSet64
+# Run the resource sampler concurrently in another PowerShell window while benchmarking:
+# $ServerPid = (Get-Process -Name llama-server | Select-Object -First 1).Id
+# .\scripts\monitor-stage9-llama.ps1 -ProcessId $ServerPid -DurationSeconds 120 -IntervalSeconds 1 -OutputPath .\stage9-llama-1p7b.csv
 ```
 
-همان مراحل را جداگانه برای `Qwen3-4B-Instruct-2507` تکرار کنید **فقط اگر واقعاً مدل GGUF و حافظه کافی وجود دارد**. اسکریپت خروجی JSON با شناسه مدل سرو‌شده، SHA256 Dataset، Warmup، تعداد خطا، TTFT/Latency و p50/p95 می‌سازد. `generated_tokens_per_second` فقط در صورت وجود `completion_tokens` واقعی در Streaming Usage محاسبه می‌شود؛ `characters_per_second_proxy` هرگز token/s نیست. `Get-Process` تنها Snapshot و PeakWorkingSet از زمان آغاز Process است؛ Peak RAM/CPU دقیق در بازه Benchmark نیازمند پروفایلینگ جداگانه است.
+همان مراحل را جداگانه برای `Qwen3-4B-Instruct-2507` تکرار کنید **فقط اگر واقعاً مدل GGUF و حافظه کافی وجود دارد**. اسکریپت خروجی JSON با شناسه مدل سرو‌شده، SHA256 Dataset، Warmup، تعداد خطا، TTFT/Latency و p50/p95 می‌سازد. `generated_tokens_per_second` فقط در صورت وجود `completion_tokens` واقعی در Streaming Usage محاسبه می‌شود؛ `characters_per_second_proxy` هرگز token/s نیست. `Get-Process` تنها Snapshot و PeakWorkingSet از زمان آغاز Process است؛ برای نمونه‌برداری دوره‌ای از RAM و CPU از `scripts/monitor-stage9-llama.ps1` در پنجره دوم استفاده کنید: CPU به درصد ظرفیت کل Logical CPU و RAM به MiB ذخیره می‌شود. `PeakWorkingSet` از زمان Launch پردازش است، نه فقط بازه تست؛ Snapshot و Timeline را با یکدیگر اشتباه نگیرید.
 
 Benchmark Retrieval/Reranking مرحله ۵ همان مسیر قبلی را دارد: `docs/stage-5-benchmark-fa.md`، `docs/stage-5-ingestion-retrieval.md` و اسکریپت‌های `benchmark_stage5_fa.py` و `benchmark_stage5_rerank_ab_fa.py`. آنها ممکن است اسناد عمومی مصنوعی را در DB مورد تست ثبت کنند؛ فقط در محیط ایزوله و با رضایت صریح خودتان اجرا شوند. Endpoint داخلی Stage 9 به Production اضافه نشده است.
 

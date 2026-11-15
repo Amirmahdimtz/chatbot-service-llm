@@ -11,7 +11,7 @@ from src.core.services.chat.chat_identity_service import ChatIdentity
 from src.core.services.conversation.conversation_service import ConversationService
 from src.core.services.rag.rag_service import RagRetrievalError, RagService
 from src.core.services.scenario_router.scenario_router_service import ScenarioRouterService
-from src.core.services.scenarios.scenario_contracts import SCENARIO_INPUTS
+from src.core.services.scenarios.scenario_contracts import SCENARIO_INPUTS, ReligiousResult
 from src.core.services.scenarios.scenario_service import ScenarioService
 from src.infrastructure.di.inject import inject
 from src.infrastructure.providers.llm.llama_cpp_provider import LlamaCppProvider, LlmStreamError
@@ -112,11 +112,10 @@ class ChatService:
                     raise RuntimeError("Scenario service unavailable")
                 decision = await scenario_service.religious_async(identity, message)
                 response_type = decision.response_type
-                structured_result = {
+                structured_result = ReligiousResult.model_validate({
                     "scenario": "religious_qa", "response_type": response_type,
-                    "sources": list(decision.sources),
-                    "pending_id": decision.pending_id,
-                }
+                    "sources": list(decision.sources), "pending_id": decision.pending_id,
+                }).model_dump(mode="json")
                 if decision.sources:
                     documents = [item for item in decision.sources if "document_id" in item]
                     references = [item for item in decision.sources if "document_id" not in item]

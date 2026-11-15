@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator, ValidationError
 
-from src.core.services.scenarios.scenario_contracts import SCENARIO_INPUTS
+from src.core.services.scenarios.scenario_contracts import SCENARIO_INPUTS, ScenarioResult, ReligiousResult
 
 
 class ChatRequestDto(BaseModel):
@@ -101,5 +101,5 @@ class ToolResultDto(BaseModel):
 
 
 class ScenarioResultEventDto(BaseModel):
-    result: dict
+    result: ScenarioResult | ReligiousResult = Field(discriminator="scenario")
 

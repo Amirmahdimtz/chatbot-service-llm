@@ -11,6 +11,7 @@ from src.core.services.errors import PermissionDenied
 from src.core.services.rag.rag_service import RagContext
 from src.core.services.scenarios.scenario_contracts import (
     FaqRecord, PersonnelRecord, PositionRecord, TaskPlanRecord,
+    ReligiousResult, ScenarioResult,
 )
 from src.core.services.scenarios.scenario_service import ScenarioService
 
@@ -76,6 +77,8 @@ def seed(repo):
              "unit_id": "u1", "position_id": "junior", "transfer_allowed": True})
     repo.add("personnel", "bob", {"skills": {"python": 4}, "years_experience": 2,
              "unit_id": "u1", "position_id": "junior", "available": True})
+    repo.add("position", "junior", {"title": "Junior", "unit_id": "u1",
+             "open_slots": 0})
     repo.add("position", "senior", {"title": "Senior python", "unit_id": "u2",
              "required_skills": {"python": 3, "sql": 3},
              "preferred_skills": {"python": 4}, "min_experience_years": 3, "open_slots": 2})
@@ -263,3 +266,21 @@ def test_import_contract_rejects_unrelated_sensitive_fields():
                 {"task_id": "duplicate", "hours": 1},
                 {"task_id": "duplicate", "hours": 1},
             ]})
+
+
+def test_structured_result_rejects_malformed_domain_and_false_approval():
+    with pytest.raises(Exception):
+        ScenarioResult.model_validate({
+            "scenario": "personnel_matching", "status": "completed",
+            "items": [{"candidate_id": "alice", "preferred_match_count": 10}],
+        })
+    with pytest.raises(Exception):
+        ReligiousResult.model_validate({
+            "scenario": "religious_qa", "response_type": "verified_faq",
+            "sources": [], "pending_id": None,
+        })
+    with pytest.raises(Exception):
+        ReligiousResult.model_validate({
+            "scenario": "religious_qa", "response_type": "rag_generated",
+            "sources": [{"type": "approved_faq"}],
+        })

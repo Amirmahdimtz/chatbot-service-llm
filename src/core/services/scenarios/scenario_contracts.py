@@ -171,6 +171,116 @@ SCENARIO_INPUTS: dict[str, type[BaseModel]] = {
 }
 
 
+
+class SkillGap(StrictRecord):
+    current: int = Field(ge=0, le=5)
+    required: int = Field(ge=1, le=5)
+
+
+class MatchingItem(StrictRecord):
+    candidate_id: str = Field(min_length=1, max_length=100)
+    satisfied_hard_requirements: list[str]
+    matched_preferred: list[str]
+    unmatched_preferred: list[str]
+    preferred_match_count: int = Field(ge=0)
+    limitations: list[str]
+
+    @model_validator(mode="after")
+    def count_matches(self):
+        if self.preferred_match_count != len(self.matched_preferred):
+            raise ValueError("Invalid preferred skill match count")
+        return self
+
+
+class TalentItem(StrictRecord):
+    position_id: str = Field(min_length=1, max_length=100)
+    title: str = Field(min_length=1, max_length=200)
+    eligible: bool
+    skill_gaps: dict[str, SkillGap]
+    experience_gap_years: int = Field(ge=0)
+    goal_alignment: list[str]
+    limitations: list[str]
+
+
+class TransferItem(StrictRecord):
+    employee_id: str = Field(min_length=1, max_length=100)
+    position_id: str = Field(min_length=1, max_length=100)
+    destination_unit_id: str = Field(min_length=1, max_length=100)
+    reason: str = Field(min_length=1)
+    operational_change: Literal[False]
+
+
+class ResearchItem(StrictRecord):
+    experience_id: str = Field(min_length=1, max_length=100)
+    title: str
+    shared_context: list[str] = Field(min_length=1)
+    different_context: list[str]
+    proposal: str
+    benefits: list[str]
+    risks: list[str]
+    assumptions: list[str]
+    evaluation_metrics: list[str]
+    uncertainty: str
+
+
+class DevelopmentStep(StrictRecord):
+    skill: str
+    current_level: int = Field(ge=0, le=5)
+    target_level: int = Field(ge=1, le=5)
+    action: str
+    target_week: int = Field(ge=1, le=52)
+    evaluation: str
+    completed: bool
+
+
+class DevelopmentItem(StrictRecord):
+    employee_id: str
+    target_position_id: str
+    duration_weeks: int = Field(ge=1, le=52)
+    steps: list[DevelopmentStep]
+    remaining_skill_gaps: dict[str, SkillGap]
+    progress_recorded: bool
+    operational_change: Literal[False]
+
+
+class AllocationItem(StrictRecord):
+    task_id: str
+    unit_id: str
+    hours: int = Field(ge=1)
+    depends_on: list[str]
+    reason: str
+    operational_change: Literal[False]
+
+
+SCENARIO_OUTPUTS: dict[str, type[BaseModel]] = {
+    "personnel_matching": MatchingItem,
+    "talent_discovery": TalentItem,
+    "internal_transfers": TransferItem,
+    "research_advice": ResearchItem,
+    "personal_development": DevelopmentItem,
+    "task_allocation": AllocationItem,
+}
+
+
+class ReligiousResult(StrictRecord):
+    scenario: Literal["religious_qa"]
+    response_type: Literal["verified_faq", "rag_generated", "insufficient_evidence"]
+    sources: list[dict[str, Any]]
+    pending_id: str | None = Field(default=None, max_length=64)
+
+    @model_validator(mode="after")
+    def provenance_required(self):
+        if self.response_type == "verified_faq":
+            if (len(self.sources) != 1 or self.sources[0].get("type") != "approved_faq"
+                    or not self.sources[0].get("expert_reference") or self.pending_id is not None):
+                raise ValueError("Approved FAQ requires an expert source")
+        elif self.response_type == "rag_generated":
+            if not self.sources or any("document_id" not in item for item in self.sources):
+                raise ValueError("RAG requires document evidence")
+        elif self.sources or not self.pending_id:
+            raise ValueError("Insufficient evidence requires a pending record")
+        return self
+
 class ScenarioResult(StrictRecord):
     scenario: Literal[
         "personnel_matching", "talent_discovery", "internal_transfers",
@@ -180,3 +290,12 @@ class ScenarioResult(StrictRecord):
     items: list[dict[str, Any]] = Field(default_factory=list, max_length=200)
     limitations: list[str] = Field(default_factory=list, max_length=50)
     sources: list[dict[str, Any]] = Field(default_factory=list, max_length=20)
+
+    @model_validator(mode="after")
+    def validate_items(self):
+        schema = SCENARIO_OUTPUTS[self.scenario]
+        self.items = [
+            schema.model_validate(item).model_dump(mode="json") for item in self.items
+        ]
+        return self
+

@@ -273,8 +273,16 @@ class ScenarioService:
         employee = PersonnelRecord.model_validate(row.payload)
         units = {row.external_key: UnitRecord.model_validate(row.payload)
                  for row in await self._list_async(identity, "unit")}
+        current_row = await self._get_async(identity, "position", employee.position_id)
+        if current_row is None:
+            return self._result("internal_transfers", [], ["Current position is unknown"])
+        current_position = PositionRecord.model_validate(current_row.payload)
+        if current_position.unit_id != employee.unit_id:
+            return self._result("internal_transfers", [], ["Current position/unit mismatch"], conflict=True)
         if employee.unit_id not in units:
             return self._result("internal_transfers", [], ["Current unit capacity is unknown"])
+        if units[employee.unit_id].current_headcount == 0:
+            return self._result("internal_transfers", [], ["Current unit headcount inconsistent"], conflict=True)
         items, limitations = [], []
         for pos_row in await self._list_async(identity, "position"):
             position = PositionRecord.model_validate(pos_row.payload)
@@ -374,12 +382,18 @@ class ScenarioService:
                 "evaluation": "Assessed skill level meets target level",
                 "completed": False,
             })
+        unknown = sorted(set(position.required_skills) - set(employee.skills))
+        limitations = ["Training timelines are planning targets, not guaranteed outcomes"]
+        if unknown:
+            limitations.append("Missing documented skill assessments: " + ", ".join(unknown))
+        if progress is not None:
+            limitations.append("Recorded progress needs evidence-based verification")
         return self._result("personal_development", [{
             "employee_id": data.employee_id, "target_position_id": data.target_position_id,
             "duration_weeks": data.weeks, "steps": steps,
             "remaining_skill_gaps": gaps, "progress_recorded": progress is not None,
             "operational_change": False,
-        }], ["Training timelines are planning targets, not guaranteed outcomes"])
+        }], limitations)
 
     async def _allocation_async(self, identity: ChatIdentity,
                                 data: AllocationInput) -> ScenarioResult:

@@ -60,6 +60,9 @@ def seed(client):
     assert put(client, "personnel", "alice", {"skills": {"python": 4},
            "years_experience": 4, "unit_id": "u1", "position_id": "junior",
            "transfer_allowed": True}).status_code == 200
+    assert put(client, "position", "junior", {
+        "title": "Junior", "unit_id": "u1", "open_slots": 0,
+    }).status_code == 200
     assert put(client, "position", "senior", {
         "title": "Senior", "unit_id": "u2", "required_skills": {"python": 4},
         "open_slots": 1,

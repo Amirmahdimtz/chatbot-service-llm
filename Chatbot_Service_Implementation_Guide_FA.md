@@ -2,7 +2,7 @@
 
 > **نام فایل:** `Chatbot_Service_Implementation_Guide_FA.md`  
 > **پروژه:** `chatbot-service-llm`  
-> **نسخه سند:** `1.4.5`  
+> **نسخه سند:** `1.4.6`  
 > **تاریخ تدوین:** `2026-11-10`  
 > **وضعیت:** قرارداد محصول و تصمیم‌های معماری مورد توافق؛ برخی تنظیمات مدل و استقرار محلی تا زمان Benchmark قابل اصلاح هستند.  
 > **سند همراه و الزامی:** `Service_Architecture_Guide_FA.md`
@@ -165,6 +165,8 @@ Streaming answer + sources + structured results
 **اصلاح مرحله ۷ (2026-11-15، نسخه 1.4.4):** در آزمایش Windows ابزار `search_knowledge` با `AGENT_TOOL_FAILED` روبه‌رو شد؛ دلیل دقیق بدون بررسی Qdrant و لاگ مشخص نیست. برای محیط تازه‌ای که Collection هنوز ساخته نشده و هیچ سند `approved` در PostgreSQL ندارد، جست‌وجوی صرفاً خواندنی نتیجه خالی می‌دهد؛ برای Collection موجود یا Metadata تأییدشده خطا همچنان حفظ می‌شود. Diagnostics فقط نام کلاس استثنا را ثبت می‌کنند. بررسی شکست مستقل اعتبارسنجی Conversation History باز است و باید بدون نمایش محتوا، ساختار پاسخ بررسی شود.
 
 **اصلاح مرحله ۷ (2026-11-15، نسخه 1.4.5):** Windows هر دو Tool مجاز را در محیط Qdrant بدون Collection با `item_count=0` اجرا کرد اما مدل در تصمیم سوم `model:value_error` تولید نمود؛ کد `AGENT_INVALID_DECISION` بود. پس از رسیدن به `agent.max_tool_calls` دیگر درخواست تصمیم جدید از Planner ارسال نمی‌شود و پاسخ با Observationهای معتبر قبلی کامل می‌گردد (در حالت همگی خالی، پاسخ محافظه‌کارانه Backend). همچنین بررسی History نشان داد دو پیام `completed` از PostgreSQL برگشتند و متن Assistant ذخیره شده است؛ Persistence این سناریو تأیید شد. نتیجه Runtime اصلاح جدید هنوز باید در Windows تست شود.
+
+**پذیرش مرحله ۷ (2026-11-15، نسخه 1.4.6):** Windows با Commit `329342514a66c36095acc4790d9c1d0f69fa2865` هر دو Tool `search_knowledge` و `list_owned_documents` را واقعاً اجرا کرد؛ هر دو نتیجۀ معتبر `item_count=0` داشتند و Agent بدون درخواست تصمیم سوم، پاسخ فارسی مبتنی بر نبود شواهد را در SSE با `message_end.completed` و `response_type=agent_generated` در 48.32 ثانیه خاتمه داد. `pytest` محلی مرحله ۷ برابر `31 passed` و GitHub Actions همان Commit برابر `201 passed, 2 skipped` روی هر دو Python 3.11/3.12، همراه Windows/Infrastructure موفق بود. بررسی قبلی History بازگشت دو پیام `completed` و ذخیره متن Assistant را تأیید کرد. محدوده اجرایی مرحله ۷ `completed` است؛ با وجود این، چون Qdrant محیط ایزوله Collection و اسناد Index‌شده نداشت، E2E پاسخ با Citation غیرخالی در Runtime واقعی هنوز تأیید نشده و همراه Benchmark/Seed مصنوعی در مرحله ۹ انجام می‌شود. این پذیرش به معنی تأیید SSO سازمانی یا Production Isolation نیست.
 
 **قواعد اجرای Agent:**
 
@@ -839,6 +841,7 @@ storage:
 | 2026-11-10 | Dev Environment | Windows 11، CPU-only، 16GB، Docker Compose | قطعی بر اساس سخت‌افزار گزارش‌شده |
 | 2026-11-10 | تست داده‌ها | Fixtureهای ساختگی و قرارداد Import برای داده واقعی سازمان | قطعی |
 | 2026-11-10 | Authentication/Approval | SSO و سیاست تصویب نهایی متعلق به سازمان؛ اتصال امن و تحلیل قابل تحویل | قطعی در حد مسئولیت |
+| 2026-11-15 | Stage 7 Windows acceptance | در Commit `3293425` هر دو Tool در Qdrant بدون Collection اجرا شدند، SSE بدون تصمیم سوم به `completed` رسید (48.32s)، تست‌های محلی 31 passed و History قبلی تأیید شد؛ E2E Citation غیرخالی و Benchmark به مرحله ۹ تعلق دارند | Stage 7 development scope completed |
 | 2026-11-15 | Stage 7 stop planning on tool budget | بعد از دو Tool موفق و بدون سند، تصمیم سوم مدل `AGENT_INVALID_DECISION` داد؛ پس از مصرف سقف فراخوانی، Agent از Observationها پاسخ نهایی می‌سازد و Planner دیگر فراخوانی نمی‌شود؛ History قبلی در Windows تأیید شد | Stage 7 pending local validation |
 | 2026-11-15 | Stage 7 empty Qdrant and History diagnosis | خطای ابزار Search با علت نامعلوم در Qdrant ایزوله، عدم پنهان‌سازی Index گم‌شده با Metadata approved، Logging صرفاً با کلاس استثنا و پیگیری History | Stage 7 pending local validation |
 | 2026-11-15 | Stage 7 evidence-required completion | بعد از مشاهده `message_end.completed` بدون Tool و با حدس درباره علت دسترسی، اولین فراخوانی Tool برای `agent_qa` الزام‌آور و پاسخ با نتیجه خالی به‌شکل server-authored و بدون ادعای غیرمستند تولید شد | Stage 7 fix pending local validation |
@@ -901,6 +904,7 @@ LLM، Embedding و Reranking محلی، Runtime اصلی llama.cpp، Vector DB �
 | نسخه | تاریخ | تغییر |
 |---|---|---|
 | `1.0.0` | `2026-11-10` | تدوین سند جامع از تصمیم‌های توافق‌شده درباره هسته چت‌بات، پنج سناریو، Agent داخلی، یک Deployment، LLM محلی، Qdrant، RAG، SSE، Storage، تست و سخت‌افزار محلی. |
+| `1.4.6` | `2026-11-15` | پذیرش Runtime مرحله ۷ با Qwen3 محلی، تأیید هر دو Tool/SSE و Persistence، ثبت محدودیت Collection خالی و پیگیری Citation E2E در مرحله ۹. |
 | `1.4.5` | `2026-11-15` | جلوگیری از تصمیم‌گیری اضافی بعد از مصرف سقف Tool Calling، ثبت موفقیت دو Tool در Windows و تأیید Persistence. |
 | `1.4.4` | `2026-11-15` | حفاظت از Retrieval با Collection غایب و ثبت شواهد دو خطای Windows جهت ارزیابی مجدد. |
 | `1.4.3` | `2026-11-15` | الزام ابزار پیش از پاسخ در `agent_qa` و پاسخ امن به نتایج خالی؛ ثبت آزمون Windows و تست‌های جدید. |

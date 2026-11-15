@@ -81,6 +81,21 @@ Conversation history validation mismatch remains under investigation; the
 authenticated GET contract returns `messages[]`, and the HTTP status,
 property names and message count should be inspected without printing content.
 
+## Windows validation result and scope
+
+The 2026-11-15 local execution validated the previously failing two-tool path:
+`message_start → tool_start(search_knowledge) → tool_result(0) →
+tool_start(list_owned_documents) → tool_result(0) → delta →
+message_end(completed)`. The stream finished in 48.32 seconds; no
+`AGENT_INVALID_DECISION`, repeated call, or tool failure occurred. The prior
+history read returned two completed messages and nonempty stored assistant text.
+
+Both tool results were empty because this isolated Qdrant deployment has no
+collections or indexed documents; therefore there were no `sources`
+events to verify in this run. Backend citation provenance and cross-audience
+permissions have automated synthetic tests, but real nonempty-source E2E
+and full benchmarking remain explicit follow-ups for Stage 9.
+
 ## Windows PowerShell — isolated development validation
 
 Keep the Stage 6 Compose project and all volumes intact. Use a *new* Compose project and ports to avoid collisions. This script assumes local `llama.cpp` services 8080/8081/8082 are already configured; do not reinstall or restart them without checking first.
@@ -131,7 +146,7 @@ curl.exe --fail --silent --show-error http://127.0.0.1:18030/api/v1/health
 .\scripts\test-chat-stream.ps1 -ApiUrl "http://127.0.0.1:18030/api/v1/chat/stream" -Scenario agent_qa -Question "اسناد متعلق به من را فهرست کن و اگر اطلاعات کافی نیست توضیح بده."
 ```
 
-Inspect `message_start.route=agent`, whether `tool_start/tool_result` really occurred (a model may select `finish` early), `message_end.response_type=agent_generated`, and history through `GET /api/v1/conversation/{conversation_id}` with the same synthetic Bearer identity. No `sources` event is expected for `list_owned_documents` alone or empty search; for citations, first index **synthetic** public documents using the Stage 5/6 fixtures and rerun a `search_knowledge` question.
+Inspect `message_start.route=agent`, at least one successful `tool_start/tool_result` (the first decision is tool-required), `message_end.response_type=agent_generated`, and history through `GET /api/v1/conversation/{conversation_id}` with the same synthetic Bearer identity. No `sources` event is expected for `list_owned_documents` alone or empty search; for citations, first index **synthetic** public documents using the Stage 5/6 fixtures and rerun a `search_knowledge` question.
 
 For troubleshooting (redact tokens, content, prompts, file paths, personal data), share:
 ```powershell
@@ -139,6 +154,6 @@ git rev-parse HEAD
 docker compose --project-name stage7-validation ps
 docker compose --project-name stage7-validation logs --tail 80 app
 ```
-Report test pass/fail output, only sanitized SSE event names/tool names/error codes, model build/flags and whether `response_format` selection succeeded. Check `LLM_BAD_RESPONSE` for malformed JSON or model-template mismatch, `LLM_BUSY` for occupied CPU model slot, `AGENT_LIMIT` for small-model failure to finish, and `AGENT_TOOL_DENIED` for missing trusted permission. Do not expose `.env` contents. CI mocks do not prove real Qwen3 JSON selection, semantic Persian quality, production SSO or sustained i7-6700 latency; Stage 7 remains **partial** until the Windows runtime evidence is received.
+Report test pass/fail output, only sanitized SSE event names/tool names/error codes, model build/flags and whether `response_format` selection succeeded. Check `LLM_BAD_RESPONSE` for malformed JSON or model-template mismatch, `LLM_BUSY` for occupied CPU model slot, `AGENT_LIMIT` for small-model failure to finish, and `AGENT_TOOL_DENIED` for missing trusted permission. Do not expose `.env` contents. Stage 7's development scope was **accepted on Windows on 2026-11-15**, at commit `329342514a66c36095acc4790d9c1d0f69fa2865`. The local Qwen3 model executed both read-only tools in the authorized synthetic public scope: `search_knowledge` produced zero sources against an uninitialized Qdrant deployment, and `list_owned_documents` returned zero owned documents. The Agent emitted a factual Persian `delta`, then `message_end(status=completed,response_type=agent_generated)`, without a third planner call, in **48.32 seconds**. The local Stage 7 suite reported **31 passed, 1 non-failing deprecation warning**; the same commit's GitHub Actions passed **201 tests, 2 skipped** on both Python 3.11 and 3.12, plus Windows and infrastructure checks. Prior Windows history inspection confirmed a scoped conversation with user/assistant messages both completed and assistant content persisted. This confirms tool selection and execution, bounded workflow, SSE finalization and local persistence in the tested path. It does **not** establish live-model citation quality with nonempty indexed sources, production SSO/tenant isolation, or sustained CPU latency. Nonempty-citation E2E with synthetic indexed documents and performance benchmarking belong to Stage 9 acceptance, not an assertion of production readiness.
 
 No destructive commands, volume deletion, database resets, force push or new production credentials are required.

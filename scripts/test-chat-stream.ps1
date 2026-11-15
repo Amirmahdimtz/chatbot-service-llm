@@ -7,7 +7,7 @@ param(
     [string]$ApiUrl = "http://127.0.0.1:18000/api/v1/chat/stream",
     [switch]$CancelAfterFirstDelta,
     [string]$ConversationId,
-    [ValidateSet("general", "knowledge_qa")]
+    [ValidateSet("general", "knowledge_qa", "agent_qa")]
     [string]$Scenario = "general",
     [string]$Question
 )
@@ -53,8 +53,8 @@ try {
     if ($Question) {
         $Body = @{ message = $Question } | ConvertTo-Json -Compress
     }
-    if ($Scenario -eq "knowledge_qa") {
-        $Body = $Body.Substring(0, $Body.Length - 1) + ',"scenario":"knowledge_qa"}'
+    if ($Scenario -ne "general") {
+        $Body = $Body.Substring(0, $Body.Length - 1) + ',"scenario":"' + $Scenario + '"}'
     }
     if ($ConversationId) {
         $ParsedId = [Guid]::Empty

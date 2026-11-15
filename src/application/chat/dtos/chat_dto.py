@@ -12,7 +12,7 @@ class ChatRequestDto(BaseModel):
 
     message: str = Field(min_length=1, max_length=1000)
     conversation_id: UUID | None = Field(default=None, strict=False)
-    scenario: Literal["general", "knowledge_qa"] = "general"
+    scenario: Literal["general", "knowledge_qa", "agent_qa"] = "general"
 
     @field_validator("message")
     @classmethod
@@ -29,7 +29,7 @@ class MessageStartDto(BaseModel):
     conversation_id: UUID
     role: Literal["assistant"] = "assistant"
     scenario: Literal["general", "knowledge_qa"] = "general"
-    route: Literal["direct_llm", "rag"] = "direct_llm"
+    route: Literal["direct_llm", "rag", "agent"] = "direct_llm"
 
 
 class DeltaDto(BaseModel):
@@ -40,7 +40,7 @@ class MessageEndDto(BaseModel):
     request_id: UUID
     message_id: UUID
     status: Literal["completed", "failed", "cancelled"]
-    response_type: Literal["direct_generated", "rag_generated", "insufficient_evidence"] | None = None
+    response_type: Literal["direct_generated", "rag_generated", "insufficient_evidence", "agent_generated"] | None = None
 
 
 class ChatErrorDto(BaseModel):
@@ -61,3 +61,15 @@ class SourceDto(BaseModel):
 
 class SourcesDto(BaseModel):
     documents: list[SourceDto]
+
+
+class ToolStartDto(BaseModel):
+    tool: Literal["search_knowledge", "list_owned_documents"]
+    call_id: UUID
+
+
+class ToolResultDto(BaseModel):
+    tool: Literal["search_knowledge", "list_owned_documents"]
+    call_id: UUID
+    status: Literal["completed"]
+    item_count: int = Field(ge=0)

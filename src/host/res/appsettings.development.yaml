@@ -53,3 +53,12 @@ auth:
 rag:
   context_token_budget: 512
   max_sources: 3
+
+agent:
+  max_steps: 4
+  max_tool_calls: 2
+  tool_timeout: 45
+  workflow_timeout: 240
+  context_budget: 3072
+  max_tool_output_size: 3072
+  max_concurrent_workflows: 1

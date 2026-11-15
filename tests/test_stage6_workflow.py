@@ -97,7 +97,7 @@ async def stack(tmp_path):
     )
     history = ConversationService(ConversationRepository(db), ChatMessageRepository(db))
     llm = LocalLlm()
-    chat = ChatService(llm, config, history, ScenarioRouterService(), RagService(index, config))
+    chat = ChatService(llm, config, history, ScenarioRouterService(), RagService(index, config), None)
     try:
         yield KnowledgeService(documents), index, vectors, history, llm, chat
     finally:

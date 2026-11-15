@@ -141,7 +141,7 @@ async def test_rag_chat_streams_sources_before_deltas_and_persists():
     provider, conversations = Provider(), Conversations()
     evidence = hit("پاسخ معتبر آزمایشی")
     rag = RagService(IndexStub([evidence]), Config())
-    chat = ChatService(provider, Config(), conversations, ScenarioRouterService(), rag)
+    chat = ChatService(provider, Config(), conversations, ScenarioRouterService(), rag, None)
     conv_id, mid = await chat.start_async("پرسش", PUBLIC, None, "knowledge_qa")
     events = [event async for event in chat.stream_async(
         "پرسش", uuid4(), __import__("uuid").UUID(mid), __import__("uuid").UUID(conv_id),
@@ -175,7 +175,7 @@ async def test_retrieval_and_model_failure_never_mark_completed():
         (IndexStub([hit()]), Provider(fail=True), "LLM_TIMEOUT"),
     ]:
         conversations = Conversations()
-        chat = ChatService(provider, Config(), conversations, ScenarioRouterService(), RagService(index, Config()))
+        chat = ChatService(provider, Config(), conversations, ScenarioRouterService(), RagService(index, Config()), None)
         events = [x async for x in chat.stream_async("سؤال", uuid4(), uuid4(), uuid4(), PUBLIC, "knowledge_qa")]
         assert events[-2].name == "error" and events[-2].payload["code"] == expected
         assert events[-1].payload["status"] == "failed"

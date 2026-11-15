@@ -12,20 +12,17 @@ from src.infrastructure.di.inject import inject
 @dataclass(frozen=True)
 class ScenarioRoute:
     scenario: str
-    path: Literal["direct_llm", "rag"]
+    path: Literal["direct_llm", "rag", "agent"]
 
 
 @inject
 class ScenarioRouterService:
-    """Only general chat and knowledge QA are active in Stage 6.
-
-    Future scenario implementations can register explicit routes here without
-    relying on text heuristics or accepting caller-supplied authorization scope.
-    """
+    """Explicit, trusted routing for direct, knowledge QA and read-only Agent workflows."""
 
     _ROUTES: dict[str, Literal["direct_llm", "rag"]] = {
         "general": "direct_llm",
         "knowledge_qa": "rag",
+        "agent_qa": "agent",
     }
 
     def route(self, scenario: str | None, identity: ChatIdentity) -> ScenarioRoute:
@@ -42,6 +39,6 @@ class ScenarioRouterService:
         path = self._ROUTES.get(selected)
         if path is None:
             raise ValueError("Unsupported scenario")
-        if path == "rag" and identity.audience == "internal" and "knowledge:read_internal" not in identity.permissions:
+        if path in {"rag", "agent"} and identity.audience == "internal" and "knowledge:read_internal" not in identity.permissions:
             raise PermissionDenied("Internal knowledge access requires permission")
         return ScenarioRoute(selected, path)

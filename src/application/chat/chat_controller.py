@@ -32,7 +32,7 @@ class ChatController:
         @router.post("/stream", summary="Stream a persisted local-model response",
                      response_class=StreamingResponse,
                      responses={
-                         200: {"description": "SSE: message_start, sources?, delta*, message_end; errors via error event",
+                         200: {"description": "SSE: message_start, tool_start?, tool_result?, sources?, delta*, message_end; errors via error event",
                                "content": {"text/event-stream": {"schema": {"type": "string"}}}},
                          401: {"description": "Untrusted identity"},
                          403: {"description": "Untrusted audience claim"},

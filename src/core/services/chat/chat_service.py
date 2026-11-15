@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from anyio import CancelScope
 from uuid import UUID
 
+from src.core.services.agent.agent_service import AgentError, AgentService
 from src.core.services.chat.chat_identity_service import ChatIdentity
 from src.core.services.conversation.conversation_service import ConversationService
 from src.core.services.rag.rag_service import RagRetrievalError, RagService
@@ -30,6 +31,18 @@ _MESSAGES = {
     "OUTPUT_LIMIT": "The response exceeded the configured limit.",
     "RETRIEVAL_UNAVAILABLE": "Authorized knowledge retrieval is temporarily unavailable.",
     "PERSISTENCE_UNAVAILABLE": "The conversation could not be saved.",
+    "AGENT_BUSY": "The agent is busy; retry later.",
+    "AGENT_TIMEOUT": "The agent workflow timed out.",
+    "AGENT_TOOL_TIMEOUT": "An authorized tool timed out.",
+    "AGENT_TOOL_FAILED": "An authorized tool failed.",
+    "AGENT_TOOL_DENIED": "This agent tool is not permitted.",
+    "AGENT_INVALID_TOOL": "The model selected an unavailable tool.",
+    "AGENT_INVALID_ARGUMENTS": "The model supplied invalid tool arguments.",
+    "AGENT_INVALID_DECISION": "The model returned an invalid tool decision.",
+    "AGENT_LIMIT": "The agent reached its workflow limit.",
+    "AGENT_REPEATED_CALL": "The agent repeated a tool call.",
+    "AGENT_TOOL_OUTPUT_LIMIT": "An authorized tool result exceeded the size limit.",
+    "AGENT_CONTEXT_LIMIT": "The agent context exceeded its size limit.",
 }
 
 
@@ -38,12 +51,13 @@ class ChatService:
     def __init__(
         self, llama_cpp_provider: LlamaCppProvider, config_reader: ConfigReader,
         conversation_service: ConversationService, scenario_router_service: ScenarioRouterService,
-        rag_service: RagService,
+        rag_service: RagService, agent_service: AgentService,
     ) -> None:
         self._provider = llama_cpp_provider
         self._conversations = conversation_service
         self._router = scenario_router_service
         self._rag = rag_service
+        self._agent = agent_service
         self._max_output_chars = int(config_reader.get("llm.max_output_chars", 8192))
         self._history_budget = int(config_reader.get("llm.history_token_budget", 256))
         if not 1 <= self._max_output_chars <= 65536:
@@ -105,10 +119,21 @@ class ChatService:
                     chunks.append(text)
                     chars += len(text)
                     yield ChatEvent("delta", {"text": text})
+            elif route.path == "agent":
+                response_type = "agent_generated"
+                iterator = self._agent.run_async(message, history, identity, route.scenario)
+                async for agent_event in iterator:
+                    if agent_event.name == "delta":
+                        delta = agent_event.payload["text"]
+                        chars += len(delta)
+                        if chars > self._max_output_chars:
+                            raise LlmStreamError("OUTPUT_LIMIT")
+                        chunks.append(delta)
+                    yield ChatEvent(agent_event.name, agent_event.payload)
             else:
                 iterator = (self._provider.stream_chat_async(message, history=history)
                             if history else self._provider.stream_chat_async(message))
-            if iterator is not None:
+            if iterator is not None and route.path != "agent":
                 async for delta in iterator:
                     chars += len(delta)
                     if chars > self._max_output_chars:
@@ -124,8 +149,8 @@ class ChatService:
                 "request_id": str(request_id), "message_id": str(message_id),
                 "status": status, "response_type": response_type,
             })
-        except (LlmStreamError, RagRetrievalError) as exc:
-            code = exc.code if isinstance(exc, LlmStreamError) else "RETRIEVAL_UNAVAILABLE"
+        except (LlmStreamError, RagRetrievalError, AgentError) as exc:
+            code = exc.code if isinstance(exc, (LlmStreamError, AgentError)) else "RETRIEVAL_UNAVAILABLE"
             if code not in _MESSAGES:
                 code = "LLM_UNAVAILABLE"
             try:

@@ -45,7 +45,7 @@ IDENTITY = ChatIdentity("synthetic", "public")
 
 async def get_events_async(provider, config=None):
     conversations = ConversationStub()
-    events = [event async for event in ChatService(provider, config or Config(), conversations).stream_async(
+    events = [event async for event in ChatService(provider, config or Config(), conversations, ScenarioRouterService(), None, None).stream_async(
         "سلام", uuid4(), uuid4(), uuid4(), IDENTITY
     )]
     return events, conversations
@@ -91,7 +91,7 @@ async def test_output_limit_never_completes_a_partial_response():
 @pytest.mark.asyncio
 async def test_close_after_delta_marks_cancelled_and_preserves_partial_text():
     conversations = ConversationStub()
-    stream = ChatService(StreamProvider(["سلام", " دنیا"]), Config(), conversations, ScenarioRouterService(), None).stream_async(
+    stream = ChatService(StreamProvider(["سلام", " دنیا"]), Config(), conversations, ScenarioRouterService(), None, None).stream_async(
         "سلام", uuid4(), uuid4(), uuid4(), IDENTITY
     )
     assert (await anext(stream)).name == "message_start"

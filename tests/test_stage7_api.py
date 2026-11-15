@@ -125,14 +125,33 @@ def test_agent_duplicate_tool_decision_completes_sse_and_persists(app, monkeypat
         assert trace[1][1]["call_id"] == trace[2][1]["call_id"]
         assert trace[-1][1]["status"] == "completed"
         assert trace[-1][1]["response_type"] == "agent_generated"
-        assert [item[0] for item in calls] == ["plan", "plan", "final"]
+        assert [item[0] for item in calls] == ["plan", "plan"]
         assert '"items":[]' in calls[-1][1]
+        assert "سندی متعلق به شما یافت نشد" in trace[3][1]["text"]
+        assert "Authentication Service" not in trace[3][1]["text"]
         conversation_id = trace[0][1]["conversation_id"]
         history = client.get(f"/api/v1/conversation/{conversation_id}", headers=HEADERS)
         assert history.status_code == 200
         assert [item["status"] for item in history.json()["messages"]] == [
             "completed", "completed",
         ]
+
+
+def test_agent_refuses_tool_free_completion_and_persists_failure(app, monkeypatch):
+    calls, _ = model_stubs(monkeypatch, [finish()])
+    with TestClient(app) as client:
+        response = client.post("/api/v1/chat/stream", json={
+            "scenario": "agent_qa", "message": "Show my owned documents",
+        }, headers=HEADERS)
+        trace = events(response)
+        assert [name for name, _ in trace] == ["message_start", "error", "message_end"]
+        assert trace[1][1]["code"] == "AGENT_INVALID_DECISION"
+        assert trace[-1][1]["status"] == "failed"
+        assert calls == [("plan", None)]
+        conversation_id = trace[0][1]["conversation_id"]
+        history = client.get(f"/api/v1/conversation/{conversation_id}", headers=HEADERS)
+        assert history.status_code == 200
+        assert history.json()["messages"][-1]["status"] == "failed"
 
 
 def test_agent_rejects_bad_choices_and_no_spoofed_scope(app, monkeypatch):
@@ -161,7 +180,7 @@ def test_agent_internal_permission_and_conversation_idor(app, monkeypatch):
     principal = {"tenant": "tenant-a", "permissions": frozenset({"knowledge:read_internal"})}
     monkeypatch.setattr(ChatIdentityService, "authenticate", lambda self, auth:
                         ChatIdentity("synthetic-staff", "internal", principal["permissions"], principal["tenant"]))
-    model_stubs(monkeypatch, [finish()])
+    model_stubs(monkeypatch, [choose("list_owned_documents", {"limit": 5}), finish()])
     with TestClient(app) as client:
         principal["permissions"] = frozenset({"chat:use_internal"})
         assert client.post("/api/v1/chat/stream", json={

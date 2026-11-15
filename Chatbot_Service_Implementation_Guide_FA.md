@@ -2,7 +2,7 @@
 
 > **نام فایل:** `Chatbot_Service_Implementation_Guide_FA.md`  
 > **پروژه:** `chatbot-service-llm`  
-> **نسخه سند:** `1.4.2`  
+> **نسخه سند:** `1.4.3`  
 > **تاریخ تدوین:** `2026-11-10`  
 > **وضعیت:** قرارداد محصول و تصمیم‌های معماری مورد توافق؛ برخی تنظیمات مدل و استقرار محلی تا زمان Benchmark قابل اصلاح هستند.  
 > **سند همراه و الزامی:** `Service_Architecture_Guide_FA.md`
@@ -159,6 +159,8 @@ Streaming answer + sources + structured results
 **اصلاح مرحله ۷ (2026-11-15):** آزمون واقعی Windows با `Qwen3-1.7B` به خطای `AGENT_INVALID_DECISION` پس از ۵۵ ثانیه رسید؛ چون `json_object` تضمین Schema تصمیم نبود. قالب تصمیم Agent به `response_format=json_schema` با wrapper سازگار با `llama.cpp` و enum ابزارهای مجاز تغییر کرد؛ Backend همچنان انتخاب و آرگومان‌ها را مستقل اعتبارسنجی می‌کند. فیلد دقیق نامعتبر در خروجی اولیه مشخص نیست. آزمون مجدد روی Build محلی و کیفیت انتخاب ابزار باز است.
 
 **اصلاح مرحله ۷ (2026-11-15، نسخه 1.4.2):** تست واقعی مدل پس از محدودسازی JSON Schema موفق به اجرای `list_owned_documents` با `item_count=0` شد، اما تصمیم بعدی تکرار همان فراخوانی بود و درخواست با `AGENT_REPEATED_CALL` پایان یافت. سیاست اجرایی تغییر کرد: فراخوانی تکراری هرگز مجدداً اجرا نمی‌شود؛ Agent از Observation قبلی برای تولید پاسخ نهایی (حتی پاسخ ناقص/فاقد سند) استفاده می‌کند. سقف فراخوانی ابزار جدید، Isolation و اعتبارسنجی‌ها تغییر نمی‌کنند. تست مجدد Runtime برای پذیرش نهایی همچنان باز است.
+
+**اصلاح مرحله ۷ (2026-11-15، نسخه 1.4.3):** در آزمون بعدی Windows، درخواست با `HTTP 200` و `message_end.completed` پایان یافت، اما هیچ `tool_start` یا `tool_result` نداشت و پاسخ مدل درباره نداشتن مجوز یا تأیید سازمانی ادعای بدون شاهد مطرح کرد. برای `agent_qa` اجرای حداقل یک Tool معتبر قبل از `finish` الزامی شد (محدودسازی Schema در اولین تصمیم و Validation سمت Backend). وقتی همه Toolهای اجراشده داده/شاهد مجاز ندارند، به‌جای پاسخ حدسی مدل، پاسخ کوتاه فارسی مبتنی بر خروجی معتبر ابزار تولید می‌شود. تست‌های SSE، Persistence، امنیت و عدم اجرای Tool تأییدشده اضافه شدند؛ پذیرش Runtime همچنان نیازمند تکرار آزمایش روی Windows است.
 
 **قواعد اجرای Agent:**
 
@@ -833,6 +835,7 @@ storage:
 | 2026-11-10 | Dev Environment | Windows 11، CPU-only، 16GB، Docker Compose | قطعی بر اساس سخت‌افزار گزارش‌شده |
 | 2026-11-10 | تست داده‌ها | Fixtureهای ساختگی و قرارداد Import برای داده واقعی سازمان | قطعی |
 | 2026-11-10 | Authentication/Approval | SSO و سیاست تصویب نهایی متعلق به سازمان؛ اتصال امن و تحلیل قابل تحویل | قطعی در حد مسئولیت |
+| 2026-11-15 | Stage 7 evidence-required completion | بعد از مشاهده `message_end.completed` بدون Tool و با حدس درباره علت دسترسی، اولین فراخوانی Tool برای `agent_qa` الزام‌آور و پاسخ با نتیجه خالی به‌شکل server-authored و بدون ادعای غیرمستند تولید شد | Stage 7 fix pending local validation |
 | 2026-11-15 | Stage 7 duplicate-call recovery | اجرای واقعی `list_owned_documents` با خروجی خالی و سپس `AGENT_REPEATED_CALL`؛ جلوگیری از اجرای تکراری با توقف برنامه‌ریزی و استفاده از نتیجه معتبر قبلی به‌جای شکست کامل؛ آزمون مجدد Windows باز | Stage 7 fix pending local validation |
 | 2026-11-15 | Stage 7 JSON decision hardening | خطای واقعی `AGENT_INVALID_DECISION` در Qwen3: مهاجرت از `json_object` آزاد به schema-constrained `json_schema` با enum ابزار و Pydantic validation مستقل؛ آزمون Windows باز | Stage 7 fix pending local validation |
 | 2026-11-15 | Stage 7 internal agent | `agent_qa → agent`؛ تصمیم JSON اعتبارسنجی‌شده مدل محلی، Allowlist با دو Tool read-only، محدودیت Workflow، SSE Tool metadata و Isolation بدون Migration؛ آزمون Qwen3 محلی هنوز باز است | Stage 7 implementation (pending Windows validation) |
@@ -892,6 +895,7 @@ LLM، Embedding و Reranking محلی، Runtime اصلی llama.cpp، Vector DB �
 | نسخه | تاریخ | تغییر |
 |---|---|---|
 | `1.0.0` | `2026-11-10` | تدوین سند جامع از تصمیم‌های توافق‌شده درباره هسته چت‌بات، پنج سناریو، Agent داخلی، یک Deployment، LLM محلی، Qdrant، RAG، SSE، Storage، تست و سخت‌افزار محلی. |
+| `1.4.3` | `2026-11-15` | الزام ابزار پیش از پاسخ در `agent_qa` و پاسخ امن به نتایج خالی؛ ثبت آزمون Windows و تست‌های جدید. |
 | `1.4.2` | `2026-11-15` | ثبت نتیجه اجرای واقعی ابزار و اصلاح رفتار در برابر تکرار فراخوانی بدون اجرای دوباره؛ تأیید پاسخ نهایی در انتظار Windows. |
 | `1.4.1` | `2026-11-15` | ثبت خطای مشاهده‌شده Windows و اصلاح تولید ساختاریافته تصمیم با JSON Schema محدودکننده؛ پذیرش Runtime در انتظار تست مجدد. |
 | `1.4.0` | `2026-11-15` | Stage 7: agent_qa routing, bounded validated JSON tool workflow, two authorized read-only tools, tool SSE, regression tests, local runtime acceptance pending. |

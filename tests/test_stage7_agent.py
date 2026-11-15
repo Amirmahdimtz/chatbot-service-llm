@@ -98,7 +98,10 @@ async def test_real_two_tool_workflow_uses_prior_tool_result_and_citations():
     assert events[2].payload["documents"][0]["document_id"] == rag.source["document_id"]
     assert model.plans[1][3] and "Synthetic policy" in model.plans[1][3]
     assert model.plans[0][4]["required"] == ["action", "tool", "arguments"]
-    assert model.plans[0][4]["properties"]["tool"]["anyOf"][0]["enum"] == [
+    assert model.plans[0][4]["properties"]["action"]["enum"] == ["tool"]
+    assert model.plans[0][4]["properties"]["tool"]["type"] == "string"
+    assert model.plans[1][4]["properties"]["action"]["enum"] == ["tool", "finish"]
+    assert model.plans[0][4]["properties"]["tool"]["enum"] == [
         "search_knowledge", "list_owned_documents",
     ]
     arguments = model.plans[0][4]["properties"]["arguments"]
@@ -149,6 +152,7 @@ async def test_agent_rejects_unknown_tool_and_step_limits():
         ([tool("list_owned_documents", {}), tool("search_knowledge", {"query": "policy"})],
          Config(agent_max_tool_calls=1), "AGENT_LIMIT"),
         ([{"action": "tool", "tool": None, "arguments": {}}], Config(), "AGENT_INVALID_DECISION"),
+        ([finish()], Config(), "AGENT_INVALID_DECISION"),
     ]:
         agent, _, model, _, _ = stack(choices, conf)
         with pytest.raises(AgentError) as exc:
@@ -230,3 +234,41 @@ async def test_invalid_decision_logs_only_safe_validation_categories(caplog):
         await collect_async(agent.run_async("docs", [], PUBLIC, "agent_qa"))
     assert "Agent decision rejected" in caplog.text
     assert "SYNTHETIC_SENSITIVE_MARKER" not in caplog.text
+
+
+
+@pytest.mark.asyncio
+async def test_empty_document_list_returns_grounded_answer_without_model_speculation():
+    agent, _, model, rag, knowledge = stack([
+        tool("list_owned_documents", {"limit": 5}), finish(),
+    ])
+    async def empty_list(identity, limit, offset):
+        knowledge.scopes.append((identity, limit, offset))
+        return [], False
+
+    knowledge.list_async = empty_list
+    events = await collect_async(agent.run_async("List my documents", [], PUBLIC, "agent_qa"))
+    assert [event.name for event in events] == ["tool_start", "tool_result", "delta"]
+    assert events[1].payload["item_count"] == 0
+    assert "سندی متعلق به شما یافت نشد" in events[-1].payload["text"]
+    assert "وضعیت مجوزها" in events[-1].payload["text"]
+    assert model.final == []
+    assert knowledge.scopes == [(PUBLIC, 5, 0)]
+    assert rag.scopes == []
+
+
+@pytest.mark.asyncio
+async def test_empty_knowledge_search_stays_bounded_and_never_invents_sources():
+    agent, _, model, rag, _ = stack([
+        tool("search_knowledge", {"query": "unknown policy"}), finish(),
+    ])
+    async def empty_search(identity, query):
+        rag.scopes.append((identity, query))
+        return RagContext("", ())
+
+    rag.prepare_async = empty_search
+    events = await collect_async(agent.run_async("unknown policy", [], PUBLIC, "agent_qa"))
+    assert [event.name for event in events] == ["tool_start", "tool_result", "delta"]
+    assert "شواهد کافی" in events[-1].payload["text"]
+    assert not any(event.name == "sources" for event in events)
+    assert model.final == []

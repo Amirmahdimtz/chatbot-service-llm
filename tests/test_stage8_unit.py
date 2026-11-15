@@ -169,7 +169,7 @@ async def test_talent_qualification_skill_gap_and_transfer_policy_capacity():
         "internal_transfers", {"employee_id": "alice"}, STAFF, "transfers")
     assert [x["destination_unit_id"] for x in transfer.items] == ["u2"]
     assert all(x["operational_change"] is False for x in transfer.items)
-    assert any("u3" in limitation for limitation in transfer.limitations)
+    assert any("lead" in limitation for limitation in transfer.limitations)
 
 
 @pytest.mark.asyncio

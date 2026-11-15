@@ -49,7 +49,17 @@ Values in both appsettings YAMLs:
 | agent.max_tool_output_size | 3072 UTF-8 bytes | 256..16384 |
 | agent.max_concurrent_workflows | 1 | 1..2 |
 
-Requests also share the existing `llm.max_concurrent_requests=1`, LLM output max and history budget. A repeated identical tool call is **not re-executed**: planning stops and the final answer streams using only previously validated authorized observations, even when the allowed tool-call budget is exhausted. An unexecuted new call beyond the budget, missing finish decision within step limit, excessive output/context, request/step timeout and model failure remain terminal sanitized errors. For an empty `list_owned_documents` result, final generation must state the lack of visible owned documents without inventing documents or implying that all tenant documents are absent. Note that UTF-8-byte budgeting is conservative, not an exact tokenizer.
+Requests also share the existing `llm.max_concurrent_requests=1`, LLM output max and history budget. A repeated identical tool call is **not re-executed**: planning stops and the final answer streams using only previously validated authorized observations, even when the allowed tool-call budget is exhausted. After the configured `agent.max_tool_calls` budget has been used, the
+workflow **does not ask the planner for another decision**. It finalizes from the
+authorized observations already collected: emits a deterministic Persian
+insufficient-evidence response if all results are empty, otherwise uses the
+streaming model with those validated tool results. This avoids a third,
+unnecessary JSON decision (the real Qwen3-1.7B Windows run returned
+`AGENT_INVALID_DECISION` after two successful empty tools). Tool execution,
+permission scopes, input/output validation and timeouts remain unchanged.
+Missing a finish decision at the `max_steps` limit when tool-call budget remains,
+excessive output/context, request/step timeout and model failure remain
+terminal sanitized errors. For an empty `list_owned_documents` result, final generation must state the lack of visible owned documents without inventing documents or implying that all tenant documents are absent. Note that UTF-8-byte budgeting is conservative, not an exact tokenizer.
 
 ## Fresh Qdrant collection retrieval and safe diagnostics
 

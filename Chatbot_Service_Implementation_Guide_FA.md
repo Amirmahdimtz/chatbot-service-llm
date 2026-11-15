@@ -2,7 +2,7 @@
 
 > **نام فایل:** `Chatbot_Service_Implementation_Guide_FA.md`  
 > **پروژه:** `chatbot-service-llm`  
-> **نسخه سند:** `1.4.4`  
+> **نسخه سند:** `1.4.5`  
 > **تاریخ تدوین:** `2026-11-10`  
 > **وضعیت:** قرارداد محصول و تصمیم‌های معماری مورد توافق؛ برخی تنظیمات مدل و استقرار محلی تا زمان Benchmark قابل اصلاح هستند.  
 > **سند همراه و الزامی:** `Service_Architecture_Guide_FA.md`
@@ -163,6 +163,8 @@ Streaming answer + sources + structured results
 **اصلاح مرحله ۷ (2026-11-15، نسخه 1.4.3):** در آزمون بعدی Windows، درخواست با `HTTP 200` و `message_end.completed` پایان یافت، اما هیچ `tool_start` یا `tool_result` نداشت و پاسخ مدل درباره نداشتن مجوز یا تأیید سازمانی ادعای بدون شاهد مطرح کرد. برای `agent_qa` اجرای حداقل یک Tool معتبر قبل از `finish` الزامی شد (محدودسازی Schema در اولین تصمیم و Validation سمت Backend). وقتی همه Toolهای اجراشده داده/شاهد مجاز ندارند، به‌جای پاسخ حدسی مدل، پاسخ کوتاه فارسی مبتنی بر خروجی معتبر ابزار تولید می‌شود. تست‌های SSE، Persistence، امنیت و عدم اجرای Tool تأییدشده اضافه شدند؛ پذیرش Runtime همچنان نیازمند تکرار آزمایش روی Windows است.
 
 **اصلاح مرحله ۷ (2026-11-15، نسخه 1.4.4):** در آزمایش Windows ابزار `search_knowledge` با `AGENT_TOOL_FAILED` روبه‌رو شد؛ دلیل دقیق بدون بررسی Qdrant و لاگ مشخص نیست. برای محیط تازه‌ای که Collection هنوز ساخته نشده و هیچ سند `approved` در PostgreSQL ندارد، جست‌وجوی صرفاً خواندنی نتیجه خالی می‌دهد؛ برای Collection موجود یا Metadata تأییدشده خطا همچنان حفظ می‌شود. Diagnostics فقط نام کلاس استثنا را ثبت می‌کنند. بررسی شکست مستقل اعتبارسنجی Conversation History باز است و باید بدون نمایش محتوا، ساختار پاسخ بررسی شود.
+
+**اصلاح مرحله ۷ (2026-11-15، نسخه 1.4.5):** Windows هر دو Tool مجاز را در محیط Qdrant بدون Collection با `item_count=0` اجرا کرد اما مدل در تصمیم سوم `model:value_error` تولید نمود؛ کد `AGENT_INVALID_DECISION` بود. پس از رسیدن به `agent.max_tool_calls` دیگر درخواست تصمیم جدید از Planner ارسال نمی‌شود و پاسخ با Observationهای معتبر قبلی کامل می‌گردد (در حالت همگی خالی، پاسخ محافظه‌کارانه Backend). همچنین بررسی History نشان داد دو پیام `completed` از PostgreSQL برگشتند و متن Assistant ذخیره شده است؛ Persistence این سناریو تأیید شد. نتیجه Runtime اصلاح جدید هنوز باید در Windows تست شود.
 
 **قواعد اجرای Agent:**
 
@@ -837,6 +839,7 @@ storage:
 | 2026-11-10 | Dev Environment | Windows 11، CPU-only، 16GB، Docker Compose | قطعی بر اساس سخت‌افزار گزارش‌شده |
 | 2026-11-10 | تست داده‌ها | Fixtureهای ساختگی و قرارداد Import برای داده واقعی سازمان | قطعی |
 | 2026-11-10 | Authentication/Approval | SSO و سیاست تصویب نهایی متعلق به سازمان؛ اتصال امن و تحلیل قابل تحویل | قطعی در حد مسئولیت |
+| 2026-11-15 | Stage 7 stop planning on tool budget | بعد از دو Tool موفق و بدون سند، تصمیم سوم مدل `AGENT_INVALID_DECISION` داد؛ پس از مصرف سقف فراخوانی، Agent از Observationها پاسخ نهایی می‌سازد و Planner دیگر فراخوانی نمی‌شود؛ History قبلی در Windows تأیید شد | Stage 7 pending local validation |
 | 2026-11-15 | Stage 7 empty Qdrant and History diagnosis | خطای ابزار Search با علت نامعلوم در Qdrant ایزوله، عدم پنهان‌سازی Index گم‌شده با Metadata approved، Logging صرفاً با کلاس استثنا و پیگیری History | Stage 7 pending local validation |
 | 2026-11-15 | Stage 7 evidence-required completion | بعد از مشاهده `message_end.completed` بدون Tool و با حدس درباره علت دسترسی، اولین فراخوانی Tool برای `agent_qa` الزام‌آور و پاسخ با نتیجه خالی به‌شکل server-authored و بدون ادعای غیرمستند تولید شد | Stage 7 fix pending local validation |
 | 2026-11-15 | Stage 7 duplicate-call recovery | اجرای واقعی `list_owned_documents` با خروجی خالی و سپس `AGENT_REPEATED_CALL`؛ جلوگیری از اجرای تکراری با توقف برنامه‌ریزی و استفاده از نتیجه معتبر قبلی به‌جای شکست کامل؛ آزمون مجدد Windows باز | Stage 7 fix pending local validation |
@@ -898,6 +901,7 @@ LLM، Embedding و Reranking محلی، Runtime اصلی llama.cpp، Vector DB �
 | نسخه | تاریخ | تغییر |
 |---|---|---|
 | `1.0.0` | `2026-11-10` | تدوین سند جامع از تصمیم‌های توافق‌شده درباره هسته چت‌بات، پنج سناریو، Agent داخلی، یک Deployment، LLM محلی، Qdrant، RAG، SSE، Storage، تست و سخت‌افزار محلی. |
+| `1.4.5` | `2026-11-15` | جلوگیری از تصمیم‌گیری اضافی بعد از مصرف سقف Tool Calling، ثبت موفقیت دو Tool در Windows و تأیید Persistence. |
 | `1.4.4` | `2026-11-15` | حفاظت از Retrieval با Collection غایب و ثبت شواهد دو خطای Windows جهت ارزیابی مجدد. |
 | `1.4.3` | `2026-11-15` | الزام ابزار پیش از پاسخ در `agent_qa` و پاسخ امن به نتایج خالی؛ ثبت آزمون Windows و تست‌های جدید. |
 | `1.4.2` | `2026-11-15` | ثبت نتیجه اجرای واقعی ابزار و اصلاح رفتار در برابر تکرار فراخوانی بدون اجرای دوباره؛ تأیید پاسخ نهایی در انتظار Windows. |

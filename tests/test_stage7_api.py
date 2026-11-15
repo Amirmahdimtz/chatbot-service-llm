@@ -137,6 +137,37 @@ def test_agent_duplicate_tool_decision_completes_sse_and_persists(app, monkeypat
         ]
 
 
+def test_agent_two_empty_tools_finalize_sse_and_persist_without_third_plan(app, monkeypatch):
+    calls, _ = model_stubs(monkeypatch, [
+        choose("search_knowledge", {"query": "synthetic leave policy"}),
+        choose("list_owned_documents", {"limit": 5}),
+        {"action": "tool", "tool": None, "arguments": {}},
+    ], evidence=False)
+    with TestClient(app) as client:
+        response = client.post("/api/v1/chat/stream", json={
+            "scenario": "agent_qa", "message": "What is in my available documents?",
+        }, headers=HEADERS)
+        assert response.status_code == 200
+        trace = events(response)
+        assert [name for name, _ in trace] == [
+            "message_start", "tool_start", "tool_result", "tool_start",
+            "tool_result", "delta", "message_end",
+        ]
+        assert trace[1][1]["tool"] == "search_knowledge"
+        assert trace[3][1]["tool"] == "list_owned_documents"
+        assert trace[2][1]["item_count"] == trace[4][1]["item_count"] == 0
+        assert "شواهد کافی" in trace[5][1]["text"]
+        assert "سندی متعلق به شما یافت نشد" in trace[5][1]["text"]
+        assert trace[-1][1]["status"] == "completed"
+        assert trace[-1][1]["response_type"] == "agent_generated"
+        assert [call[0] for call in calls] == ["plan", "scope", "plan"]
+        cid = trace[0][1]["conversation_id"]
+        saved = client.get(f"/api/v1/conversation/{cid}", headers=HEADERS)
+        assert saved.status_code == 200
+        assert [msg["status"] for msg in saved.json()["messages"]] == ["completed", "completed"]
+        assert saved.json()["messages"][-1]["content"] == trace[5][1]["text"]
+
+
 def test_agent_refuses_tool_free_completion_and_persists_failure(app, monkeypatch):
     calls, _ = model_stubs(monkeypatch, [finish()])
     with TestClient(app) as client:

@@ -89,13 +89,14 @@ async def collect_async(stream):
 async def test_real_two_tool_workflow_uses_prior_tool_result_and_citations():
     agent, _, model, rag, knowledge = stack([
         tool("search_knowledge", {"query": "Synthetic policy"}),
-        tool("list_owned_documents", {"limit": 1}), finish(),
+        tool("list_owned_documents", {"limit": 1}),
     ])
     events = await collect_async(agent.run_async("Tell me about my documents", [], PUBLIC, "agent_qa"))
     assert [event.name for event in events] == [
         "tool_start", "tool_result", "sources", "tool_start", "tool_result", "delta",
     ]
     assert events[2].payload["documents"][0]["document_id"] == rag.source["document_id"]
+    assert len(model.plans) == 2
     assert model.plans[1][3] and "Synthetic policy" in model.plans[1][3]
     assert model.plans[0][4]["required"] == ["action", "tool", "arguments"]
     assert model.plans[0][4]["properties"]["action"]["enum"] == ["tool"]
@@ -149,8 +150,6 @@ async def test_agent_rejects_unknown_tool_and_step_limits():
     for choices, conf, code in [
         ([tool("shell", {})], Config(), "AGENT_INVALID_TOOL"),
         ([tool("list_owned_documents", {}), finish()], Config(agent_max_steps=1), "AGENT_LIMIT"),
-        ([tool("list_owned_documents", {}), tool("search_knowledge", {"query": "policy"})],
-         Config(agent_max_tool_calls=1), "AGENT_LIMIT"),
         ([{"action": "tool", "tool": None, "arguments": {}}], Config(), "AGENT_INVALID_DECISION"),
         ([finish()], Config(), "AGENT_INVALID_DECISION"),
     ]:
@@ -165,11 +164,10 @@ async def test_agent_rejects_unknown_tool_and_step_limits():
 @pytest.mark.parametrize("choices,expected", [
     ([tool("list_owned_documents", {}), tool("list_owned_documents", {})],
      ["tool_start", "tool_result", "delta"]),
-    ([tool("list_owned_documents", {}), tool("search_knowledge", {"query": "Synthetic policy"}),
-      tool("list_owned_documents", {})],
+    ([tool("list_owned_documents", {}), tool("search_knowledge", {"query": "Synthetic policy"})],
      ["tool_start", "tool_result", "tool_start", "tool_result", "sources", "delta"]),
 ])
-async def test_duplicate_planning_reuses_prior_results_without_rerunning_tools(choices, expected):
+async def test_duplicate_or_exhausted_budget_finalizes_without_extra_planning(choices, expected):
     agent, _, model, rag, knowledge = stack(choices)
     emitted = await collect_async(agent.run_async("List my documents", [], PUBLIC, "agent_qa"))
     assert [event.name for event in emitted] == expected
@@ -178,7 +176,22 @@ async def test_duplicate_planning_reuses_prior_results_without_rerunning_tools(c
     assert len(knowledge.scopes) == 1
     assert knowledge.scopes[0] == (PUBLIC, 5, 0)
     assert "Synthetic owned document" in model.final[0][3]
-    assert len(rag.scopes) == (1 if len(choices) == 3 else 0)
+    assert len(rag.scopes) == (1 if len(choices) == 2 else 0)
+    assert agent._slots._value == 1
+
+
+@pytest.mark.asyncio
+async def test_one_tool_budget_finalizes_without_requesting_another_decision():
+    # Even an invalid hypothetical next choice must never be consulted.
+    agent, _, model, _, knowledge = stack([
+        tool("list_owned_documents", {"limit": 2}),
+        {"action": "invalid"},
+    ], Config(agent_max_tool_calls=1))
+    events = await collect_async(agent.run_async("List my documents", [], PUBLIC, "agent_qa"))
+    assert [event.name for event in events] == ["tool_start", "tool_result", "delta"]
+    assert len(model.plans) == 1
+    assert len(model.final) == 1
+    assert len(knowledge.scopes) == 1
     assert agent._slots._value == 1
 
 

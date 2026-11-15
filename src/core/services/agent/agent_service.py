@@ -221,6 +221,11 @@ class AgentService:
                                                          "status": "completed", "item_count": count})
                         if decision.tool == "search_knowledge" and output.get("sources"):
                             yield AgentEvent("sources", {"documents": output["sources"]})
+                        if calls >= self._max_calls:
+                            # Do not request another planner decision with no remaining
+                            # tool budget. Finalize using only validated observations.
+                            logger.info("Agent exhausted tool-call budget; finalizing evidence")
+                            break
                     else:
                         raise AgentError("AGENT_LIMIT")
                     empty_reply = self._empty_evidence_reply(observations)

@@ -76,9 +76,30 @@ class LlamaCppProvider:
                     payload = models.json()
                 except ValueError:
                     return "invalid_models_response"
-                if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+                if not isinstance(payload, dict):
                     return "invalid_models_response"
-                return "ready" if payload["data"] else "no_model_loaded"
+                # OpenAI-compatible and native llama.cpp model listing formats.
+                if "data" in payload:
+                    entries = payload["data"]
+                    model_key = "id"
+                elif "models" in payload:
+                    entries = payload["models"]
+                    model_key = "model"
+                else:
+                    return "invalid_models_response"
+                if not isinstance(entries, list):
+                    return "invalid_models_response"
+                if not entries:
+                    return "no_model_loaded"
+                for entry in entries:
+                    if not isinstance(entry, dict):
+                        return "invalid_models_response"
+                    identifier = entry.get(model_key)
+                    if model_key == "model" and not identifier:
+                        identifier = entry.get("name")
+                    if not isinstance(identifier, str) or not identifier:
+                        return "invalid_models_response"
+                return "ready"
         except httpx.TimeoutException:
             return "timeout"
         except httpx.ConnectError:

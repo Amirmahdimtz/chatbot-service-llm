@@ -104,3 +104,31 @@ async def test_llama_connection_failure_is_controlled(monkeypatch):
     )
     provider = llama_cpp_provider.LlamaCppProvider(StubConfig({"llm.base_url": "http://localhost:8080"}))
     assert not await provider.check_ready_async()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("listing,ready", [
+    ({"models": [{"name": r"D:\\models\\Qwen3.gguf", "model": r"D:\\models\\Qwen3.gguf"}]}, "ready"),
+    ({"models": [{"name": "synthetic-model"}]}, "ready"),
+    ({"models": []}, "no_model_loaded"),
+    ({"models": [{"model": ""}]}, "invalid_models_response"),
+    ({"models": [{"id": "only-openai-field"}]}, "invalid_models_response"),
+])
+async def test_llama_native_model_listing_readiness(monkeypatch, listing, ready):
+    original = httpx.AsyncClient
+
+    def handler(request):
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok"})
+        if request.url.path == "/v1/models":
+            return httpx.Response(200, json=listing)
+        return httpx.Response(404)
+
+    monkeypatch.setattr(
+        llama_cpp_provider.httpx, "AsyncClient",
+        lambda **kw: original(transport=httpx.MockTransport(handler), **kw),
+    )
+    instance = llama_cpp_provider.LlamaCppProvider(
+        StubConfig({"llm.base_url": "http://localhost:8080"})
+    )
+    assert await instance.readiness_status_async() == ready

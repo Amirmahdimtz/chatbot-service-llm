@@ -101,3 +101,75 @@ def test_broken_sse_is_an_error_not_a_success():
                       transport=httpx.MockTransport(broken)) as client:
         with pytest.raises(BenchmarkError, match="Incomplete"):
             collect_sample(client, "synthetic-test-model", "test", 32)
+
+
+
+def test_native_llama_cpp_models_shape_with_auth_is_supported():
+    prompts, digest = load_prompts()
+    actual_model = r"D:\models\Qwen3-1.7B-Q4_K_M.gguf"
+
+    def handler(request):
+        assert request.headers.get("authorization") == "Bearer synthetic-runtime-key"
+        if request.url.path == "/v1/models":
+            return httpx.Response(200, json={
+                "models": [{"name": actual_model, "model": actual_model}]
+            })
+        return fake_transport(request)
+
+    with httpx.Client(
+        base_url="http://127.0.0.1:8080",
+        headers={"Authorization": "Bearer synthetic-runtime-key"},
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        report = build_report(
+            client, prompts, digest, model_label="SYNTHETIC HTTP TEST",
+            runtime_version="test", quantization="test", runs=1, warmup=1,
+            max_tokens=32,
+        )
+    assert report["model_id_served"] == actual_model
+    assert report["completed"] == 4
+    assert report["failed"] == 0
+
+
+def test_native_llama_cpp_name_fallback_and_invalid_shape():
+    from src.infrastructure.scripts.benchmark_stage9_llm import model_id_async_safe
+
+    def handler(request):
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok"})
+        if request.url.path == "/v1/models":
+            return httpx.Response(200, json={"models": [{"name": "test-model"}]})
+        return httpx.Response(404)
+
+    with httpx.Client(base_url="http://127.0.0.1:8080",
+                      transport=httpx.MockTransport(handler)) as client:
+        assert model_id_async_safe(client, "") == "test-model"
+        with pytest.raises(BenchmarkError, match="not served"):
+            model_id_async_safe(client, "other-model")
+
+    for response in ({"models": [{"name": ""}]}, {"models": [42]}, {"models": []}):
+        with httpx.Client(
+            base_url="http://127.0.0.1:8080",
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, json=(
+                    {"status": "ok"} if request.url.path == "/health" else response
+                ))
+            ),
+        ) as client:
+            with pytest.raises(BenchmarkError, match="Invalid model listing"):
+                model_id_async_safe(client, "")
+
+
+def test_llm_listing_unauthorized_error_is_actionable_without_leaking_token():
+    from src.infrastructure.scripts.benchmark_stage9_llm import model_id_async_safe
+
+    def unauthorized(request):
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok"})
+        return httpx.Response(401, json={"error": {"message": "secret response"}})
+
+    with httpx.Client(base_url="http://127.0.0.1:8080",
+                      transport=httpx.MockTransport(unauthorized)) as client:
+        with pytest.raises(BenchmarkError, match="CHATBOT_LLM_API_KEY") as info:
+            model_id_async_safe(client, "")
+    assert "secret response" not in str(info.value)

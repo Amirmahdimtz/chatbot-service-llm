@@ -123,7 +123,10 @@ if ((Test-Path $LlamaServerExe) -and (Test-Path $ModelFile)) {
 
 ```powershell
 Invoke-RestMethod 'http://127.0.0.1:8080/health'
-Invoke-RestMethod 'http://127.0.0.1:8080/v1/models'
+# A runtime API key stored in .env is not automatically exported to Windows PowerShell.
+# Set CHATBOT_LLM_API_KEY privately in the current process before running this check.
+$Headers = @{ Authorization = "Bearer $env:CHATBOT_LLM_API_KEY" }
+Invoke-RestMethod 'http://127.0.0.1:8080/v1/models' -Headers $Headers
 python -m src.infrastructure.scripts.benchmark_stage9_llm --base-url http://127.0.0.1:8080 --model-label Qwen3-1.7B --quantization Q4_K_M --runs 3 --warmup 1 --include-responses --output .\stage9-llm-1p7b-local.json
 Get-Process -Name llama-server -ErrorAction SilentlyContinue | Select-Object Id, CPU, WorkingSet64, PeakWorkingSet64
 # Run the resource sampler concurrently in another PowerShell window while benchmarking:

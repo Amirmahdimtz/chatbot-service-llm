@@ -67,13 +67,38 @@ def model_id_async_safe(client: httpx.Client, requested: str) -> str:
     if health.status_code != 200:
         raise BenchmarkError("llama.cpp /health is unavailable")
     models = client.get("/v1/models")
+    if models.status_code in (401, 403):
+        raise BenchmarkError("llama.cpp /v1/models requires a valid CHATBOT_LLM_API_KEY")
     if models.status_code != 200:
         raise BenchmarkError("llama.cpp /v1/models is unavailable")
     try:
-        entries = models.json()["data"]
-        ids = [entry["id"] for entry in entries]
-        if not ids or not all(isinstance(x, str) and x for x in ids):
-            raise ValueError("No models")
+        payload = models.json()
+        if not isinstance(payload, dict):
+            raise ValueError("Invalid models payload")
+        # Older/native llama.cpp responses expose "models" with "model"/"name",
+        # while OpenAI-compatible listings expose "data" with "id".
+        if "data" in payload:
+            entries = payload["data"]
+            key = "id"
+        elif "models" in payload:
+            entries = payload["models"]
+            key = "model"
+        else:
+            raise ValueError("Missing models")
+        if not isinstance(entries, list):
+            raise ValueError("Invalid model entries")
+        ids = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                raise ValueError("Invalid model entry")
+            model_id = entry.get(key)
+            if key == "model" and not model_id:
+                model_id = entry.get("name")
+            if not isinstance(model_id, str) or not model_id:
+                raise ValueError("Invalid model ID")
+            ids.append(model_id)
+        if not ids or len(set(ids)) != len(ids):
+            raise ValueError("Empty or duplicate model IDs")
     except (ValueError, KeyError, TypeError) as exc:
         raise BenchmarkError("Invalid model listing") from exc
     if requested:
